@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Browse pets — AdoptScout</title>
+  <link rel="icon" type="image/svg+xml" href="img/logo-icon.svg" />
+  <!-- Select2 (https://select2.org) powers the searchable State dropdown below -- loaded from
+       CDN, no build step or package manager, matching how this whole app is put together.
+       Pinned versions so a CDN update never changes this page's behavior underneath it. -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-header__top">
+      <h1><a href="index.html" class="brand"><img src="img/logo-icon.svg" alt="" class="brand__logo" width="32" height="32" />AdoptScout</a></h1>
+      <nav class="app-nav">
+        <a href="index.html">Home</a>
+        <a href="browse.html" class="active">Browse</a>
+        <a href="favorites.html">Favorites</a>
+        <a href="about.html">About</a>
+      </nav>
+    </div>
+    <p class="app-header__subtitle">Find your new best friend, from shelters nationwide 🐾</p>
+  </header>
+
+  <main class="container">
+    <form class="browse-layout" id="filters-form">
+      <aside class="filters-sidebar">
+        <div class="filters-sidebar__header">
+          <h2>Filters</h2>
+          <button type="button" class="filters-clear" id="clear-filters">Clear all</button>
+        </div>
+
+        <input type="text" id="filter-q" class="filter-search" placeholder="🔍 Search by name…" />
+
+        <div class="filter-group" data-group="species">
+          <button type="button" class="filter-group__toggle">
+            <span>🐾 Species</span>
+            <span class="filter-group__chevron">⌄</span>
+          </button>
+          <div class="filter-group__panel">
+            <label class="filter-checkbox"><input type="checkbox" name="species" value="Dog" /> Dog</label>
+            <label class="filter-checkbox"><input type="checkbox" name="species" value="Cat" /> Cat</label>
+            <label class="filter-checkbox"><input type="checkbox" name="species" value="Rabbit" /> Rabbit</label>
+            <label class="filter-checkbox"><input type="checkbox" name="species" value="Bird" /> Bird</label>
+          </div>
+        </div>
+
+        <div class="filter-group" data-group="breed">
+          <button type="button" class="filter-group__toggle">
+            <span>🐕 Breed</span>
+            <span class="filter-group__chevron">⌄</span>
+          </button>
+          <div class="filter-group__panel">
+            <select id="filter-breed" class="filter-breed-select"></select>
+            <p class="filter-group__note">Pick a suggestion or type any breed text — results update as you type. Matches anything containing what you type (e.g. "Lab" matches "Labrador Retriever" and "Lab Mix").</p>
+          </div>
+        </div>
+
+        <div class="filter-group" data-group="age">
+          <button type="button" class="filter-group__toggle">
+            <span>🎂 Age</span>
+            <span class="filter-group__chevron">⌄</span>
+          </button>
+          <div class="filter-group__panel">
+            <label class="filter-checkbox"><input type="checkbox" name="age" value="Baby" /> Baby</label>
+            <label class="filter-checkbox"><input type="checkbox" name="age" value="Kitten" /> Kitten</label>
+            <label class="filter-checkbox"><input type="checkbox" name="age" value="Young" /> Young</label>
+            <label class="filter-checkbox"><input type="checkbox" name="age" value="Adult" /> Adult</label>
+            <label class="filter-checkbox"><input type="checkbox" name="age" value="Senior" /> Senior</label>
+          </div>
+        </div>
+
+        <div class="filter-group" data-group="gender">
+          <button type="button" class="filter-group__toggle">
+            <span>⚥ Gender</span>
+            <span class="filter-group__chevron">⌄</span>
+          </button>
+          <div class="filter-group__panel">
+            <label class="filter-checkbox"><input type="checkbox" name="gender" value="Male" /> Male</label>
+            <label class="filter-checkbox"><input type="checkbox" name="gender" value="Female" /> Female</label>
+          </div>
+        </div>
+
+        <div class="filter-group" data-group="size">
+          <button type="button" class="filter-group__toggle">
+            <span>📏 Size</span>
+            <span class="filter-group__chevron">⌄</span>
+          </button>
+          <div class="filter-group__panel">
+            <label class="filter-checkbox"><input type="checkbox" name="size" value="Small" /> Small</label>
+            <label class="filter-checkbox"><input type="checkbox" name="size" value="Medium" /> Medium</label>
+            <label class="filter-checkbox"><input type="checkbox" name="size" value="Large" /> Large</label>
+            <label class="filter-checkbox"><input type="checkbox" name="size" value="Extra Large" /> Extra Large</label>
+          </div>
+        </div>
+
+        <div class="filter-group" data-group="location">
+          <button type="button" class="filter-group__toggle">
+            <span>📍 Location</span>
+            <span class="filter-group__chevron">⌄</span>
+          </button>
+          <div class="filter-group__panel">
+            <select id="filter-state" class="filter-state-select">
+              <option value="">Any state</option>
+            </select>
+            <p id="location-banner" class="location-banner" hidden></p>
+          </div>
+        </div>
+
+        <label class="chip-toggle filter-urgent-toggle" id="urgent-toggle-label">
+          <input type="checkbox" id="filter-urgent" /> 🚨 Urgent only
+        </label>
+      </aside>
+
+      <section class="results-panel">
+        <div id="source-banner"></div>
+        <div id="results"></div>
+        <button type="button" class="load-more" id="load-more" hidden>Load more</button>
+      </section>
+    </form>
+  </main>
+
+  <footer class="app-footer">
+    <p>Pet data provided by <a href="https://rescuegroups.org" target="_blank" rel="noopener">RescueGroups.org</a>, which aggregates listings from thousands of shelters and rescues nationwide. AdoptScout is an independent project and is not affiliated with or endorsed by RescueGroups.org.</p>
+    <p class="app-footer__credit">Created by <a href="https://www.linkedin.com/in/jose-lopez-jr/" target="_blank" rel="noopener">Jose Lopez Jr</a> · <a href="about.html">About this project</a></p>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/browse.js"></script>
+</body>
+</html>

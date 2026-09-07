@@ -1,0 +1,17 @@
+{
+  "name": "adopt-scout",
+  "version": "1.0.0",
+  "description": "AdoptScout. Browses adoptable pets nationwide via RescueGroups.org, run as a self-hosted Node/Express app behind a reverse proxy.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/run-tests.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

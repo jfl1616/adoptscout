@@ -1,0 +1,1435 @@
+:root {
+  --color-bg: #fff8f3;
+  --color-surface: #ffffff;
+  --color-text: #2b2420;
+  --color-text-muted: #6b6058;
+  --color-terracotta: #c96f4a;
+  --color-terracotta-dark: #a85736;
+  --color-sage: #8fa37e;
+  --color-sage-light: #eef3ea;
+  --color-urgent: #e5484d;
+  --color-heart: #ff6b6b;
+  --color-border: #ece1d8;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 8px;
+  --shadow-card: 0 4px 16px rgba(43, 36, 32, 0.08);
+  --shadow-card-hover: 0 10px 28px rgba(43, 36, 32, 0.16);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #201b17;
+    --color-surface: #2b2420;
+    --color-text: #f5ede4;
+    --color-text-muted: #b8aca1;
+    --color-border: #3d342c;
+    --color-sage-light: #2f3a2a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Without this, an element that's both marked `hidden` and given an explicit `display` value by
+   a class below (e.g. `.load-more { display: block }`, `.location-banner { display: flex }`)
+   stays visible: the class and the browser's built-in `[hidden]` rule have equal specificity, so
+   whichever is an author style (the class) wins over the user-agent default. This makes toggling
+   `el.hidden` from JS actually work everywhere in this app, instead of only for elements with no
+   other `display` rule. */
+[hidden] {
+  display: none !important;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  padding: 16px 20px;
+}
+
+.app-header__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  max-width: 1100px;
+  margin: 0 auto 4px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.app-header h1 a {
+  color: inherit;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand__logo {
+  border-radius: 8px;
+  display: block;
+}
+
+.app-nav {
+  display: flex;
+  gap: 16px;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.app-nav a {
+  color: var(--color-text-muted);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+}
+
+.app-nav a.active,
+.app-nav a:hover {
+  color: var(--color-terracotta-dark);
+  background: var(--color-sage-light);
+}
+
+.app-header__subtitle {
+  max-width: 1100px;
+  margin: 0 auto;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Browse page: left filters sidebar + results, Petfinder-style ------------------------------ */
+
+.browse-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+}
+
+.filters-sidebar {
+  flex: 0 0 260px;
+  width: 260px;
+  position: sticky;
+  top: 84px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+.filters-sidebar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.filters-sidebar__header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.filters-clear {
+  background: none;
+  border: none;
+  color: var(--color-terracotta-dark);
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.filter-search {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  margin-bottom: 14px;
+}
+
+.filter-group {
+  border-top: 1px solid var(--color-border);
+  padding: 10px 0;
+}
+
+.filter-group:first-of-type {
+  border-top: none;
+}
+
+.filter-group__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.filter-group__chevron {
+  color: var(--color-text-muted);
+  transition: transform 0.15s ease;
+}
+
+.filter-group--open .filter-group__chevron {
+  transform: rotate(180deg);
+}
+
+.filter-group__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.filter-group__panel input[type="text"] {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 0.88rem;
+  width: 100%;
+}
+
+.filter-group__note {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter-checkbox input {
+  accent-color: var(--color-terracotta);
+  width: 16px;
+  height: 16px;
+}
+
+.filter-urgent-toggle {
+  margin-top: 14px;
+}
+
+.results-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 820px) {
+  .browse-layout {
+    flex-direction: column;
+  }
+
+  .filters-sidebar {
+    position: static;
+    width: 100%;
+    max-height: none;
+  }
+}
+
+.chip-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chip-toggle input {
+  accent-color: var(--color-terracotta);
+}
+
+.chip-toggle.active {
+  background: var(--color-terracotta);
+  border-color: var(--color-terracotta);
+  color: #fff;
+}
+
+.pet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.pet-card {
+  position: relative;
+  display: block;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pet-card:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.pet-card__photo {
+  position: relative;
+  aspect-ratio: 0.82;
+  background-color: var(--color-sage-light);
+  display: flex;
+  align-items: flex-end;
+}
+
+.pet-card__photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0) 55%);
+}
+
+/* The actual photo (or its placeholder) lives on its own layer, separate from `.pet-card__photo`
+   itself, so the parallax tilt effect (see enableTiltEffect() in common.js) can translate/scale
+   just the image on hover without dragging the badge/favorite-button/gradient along with it. */
+.pet-card__photo-img {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  transition: transform 0.15s ease;
+}
+
+/* Shown instead of a photo when a pet has none at all, or when its photo URL turns out to be
+   broken (see applyPhoto() in common.js) -- a flat sage box previously, with nothing to signal
+   "no photo" versus "still loading." */
+.pet-card__photo-img--empty {
+  background-image: url('../img/photo-placeholder.svg');
+  background-size: 46% auto;
+  background-repeat: no-repeat;
+  background-position: center 42%;
+}
+
+/* A soft, cursor-tracking highlight painted in by the tilt effect on hover -- purely cosmetic,
+   stays fully transparent (opacity 0) until JS sets it, so it's invisible on touch/coarse
+   pointers and under reduced motion, where the tilt effect never runs at all. */
+.pet-card__glare {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+}
+
+.pet-card__info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 14px;
+  color: #fff;
+  z-index: 1;
+}
+
+.pet-card__info h3 {
+  margin: 0 0 2px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.pet-card__info p {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.92;
+}
+
+.badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 5px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.badge--urgent {
+  background: var(--color-urgent);
+  color: #fff;
+}
+
+.fav-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.32);
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fav-btn--active {
+  color: var(--color-heart);
+}
+
+.empty-state,
+.error-state,
+.loading-state {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: 60px 20px;
+  /* No-op unless this state renders directly inside a `.pet-grid` (e.g. the landing page's
+     featured section) -- there, without this, a lone status message would only fill the grid's
+     first ~220px column instead of the full row. */
+  grid-column: 1 / -1;
+}
+
+/* Modern loading spinner -- a plain CSS rotating ring, no jQuery/plugin needed. Two sizes:
+   the default for a full loading state (initial search / new filters), `.spinner--sm` for an
+   inline spinner next to text (e.g. the "Load more" button while fetching the next page). */
+.spinner {
+  display: inline-block;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 14px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-terracotta-dark);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.spinner--sm {
+  width: 14px;
+  height: 14px;
+  margin: 0 8px 0 0;
+  border-width: 2px;
+  vertical-align: -2px;
+}
+
+.load-more .spinner--sm {
+  border-color: rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 1.6s;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+.load-more {
+  display: block;
+  margin: 24px auto 0;
+  padding: 12px 28px;
+  border-radius: 999px;
+  border: none;
+  background: var(--color-terracotta);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.load-more:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Detail page */
+
+/* Pet detail page: a left sticky section-jump menu (Photos/About/Story/Shelter) alongside the
+   main content, built in pet.js's buildToc()/initScrollSpy(). Deliberately a vertical menu, not
+   a horizontal tab strip -- see buildToc()'s own comment for why. */
+.detail-layout {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+.detail-toc {
+  position: sticky;
+  top: 84px;
+}
+
+/* Without this, clicking a TOC link scrolls its section flush to the very top of the viewport --
+   which is directly behind the sticky .app-header (see buildToc()'s scrollIntoView call in
+   pet.js). That hides the section's own heading behind the header, and since a short section
+   (About in particular -- just a name/breed/trait row) barely fills the space the header eats,
+   the visible result looks like it jumped straight into the *next* section instead. `scroll-
+   margin-top` is exactly what `scrollIntoView`/anchor scrolling honors for this: 96px matches the
+   rootMargin buffer initScrollSpy() already uses for the same sticky-header offset, so "what
+   looks scrolled-to" and "what counts as active" agree. */
+.detail-content > section {
+  scroll-margin-top: 96px;
+}
+
+.detail-toc__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid var(--color-border);
+}
+
+.detail-toc__link {
+  display: block;
+  padding: 8px 0 8px 14px;
+  margin-left: -2px;
+  border-left: 2px solid transparent;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 0.92rem;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.detail-toc__link:hover {
+  color: var(--color-text);
+}
+
+.detail-toc__link--active {
+  color: var(--color-terracotta-dark);
+  border-left-color: var(--color-terracotta);
+}
+
+.shelter-card__intro {
+  color: var(--color-text-muted);
+  margin: 0 0 4px;
+}
+
+@media (max-width: 820px) {
+  .detail-layout {
+    display: block;
+  }
+  .detail-toc {
+    position: static;
+    margin-bottom: 20px;
+  }
+  .detail-toc__list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    border-left: none;
+    border-bottom: 2px solid var(--color-border);
+    padding-bottom: 8px;
+  }
+  .detail-toc__link {
+    padding: 4px 0;
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    margin-left: 0;
+  }
+  .detail-toc__link--active {
+    border-bottom-color: var(--color-terracotta);
+  }
+}
+
+.detail-hero {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  background: var(--color-sage-light);
+  margin-bottom: 20px;
+}
+
+/* A blurred, oversized copy of the same photo sitting behind everything else, so the hero box
+   never shows bare empty space around a photo whose own aspect ratio doesn't match the hero's
+   fixed 4:3 box -- see `.detail-hero__base`/`__reveal` below, which switched from `cover` (crops
+   the photo to fill the box, cutting off ears/tails/faces on anything not already 4:3) to
+   `contain` (always shows the whole photo, uncropped) after Jose flagged photos getting cut off.
+   `inset: -20px` plus `scale(1.15)` push the blur's own soft edges outside the hero's rounded
+   corners, which `overflow: hidden` on `.detail-hero` then clips clean. */
+.detail-hero__backdrop {
+  position: absolute;
+  inset: -20px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(28px) brightness(0.65) saturate(1.15);
+  transform: scale(1.15);
+}
+
+/* Two stacked photo layers make the "circle swap" gallery below possible: `__base` is whichever
+   photo is currently settled, `__reveal` is the incoming photo during a swap, clipped down to a
+   circle that grows from the clicked thumbnail's position out to fully cover the hero. See
+   circleSwapPhoto() in pet.js. No z-index needed -- `__backdrop` is inserted first, then `__base`,
+   so `__reveal` already paints above both by plain DOM order. `background-size: contain` (rather
+   than the `cover` this used before) means the full photo is always visible, letterboxed against
+   the blurred backdrop above instead of cropped to fill the box. */
+.detail-hero__base,
+.detail-hero__reveal {
+  position: absolute;
+  inset: 0;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.detail-hero__reveal {
+  clip-path: circle(0px at 50% 50%);
+  transition: clip-path 0.6s cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+
+/* Shown when this pet has no photo at all, or its photo URL turns out to be broken (see
+   applyPhoto() in common.js) -- same placeholder graphic as the browse-page cards, just sized
+   for the hero's larger, wider (4:3) box. Shared by both photo layers above. */
+.detail-hero-layer--empty {
+  background-image: url('../img/photo-placeholder.svg');
+  background-size: 34% auto;
+  background-repeat: no-repeat;
+  background-position: center 40%;
+}
+
+.detail-hero__thumbs-img--broken {
+  display: none;
+}
+
+.detail-hero__scrim {
+  position: absolute;
+  inset: 0;
+  /* Darkens the top (for the "← Back"/Share/Save buttons) and the bottom (for the circular
+     thumbnail strip below) while leaving the middle of the photo untouched. */
+  background:
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 30%),
+    linear-gradient(to top, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0) 26%);
+}
+
+.detail-hero__actions {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  z-index: 2;
+}
+
+/* Overlaid on the hero photo itself, near the bottom -- the gallery's own "circle" thumbnails,
+   matching the idea behind pens like https://codepen.io/ste-vg/pen/WNvYWKr, rather than a plain
+   square filmstrip sitting below the photo. */
+.detail-hero__thumbs {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  z-index: 2;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  overflow-x: auto;
+  /* Without this, setting only overflow-x computes overflow-y to `auto` too (a well-known CSS
+     quirk: the non-`visible` axis "leaks" onto the other axis), so hovering a thumbnail and
+     triggering its `transform: scale(1.08)` above nudged this box's scrollable-overflow height
+     just past its own box height -- enough for the browser to pop up a real vertical scrollbar
+     floating over the photo. Pinning overflow-y to hidden stops that outright. */
+  overflow-y: hidden;
+  padding: 0 12px;
+}
+
+.detail-hero__thumbs img {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.detail-hero__thumbs img:hover {
+  transform: scale(1.08);
+}
+
+.detail-hero__thumbs img.active {
+  border-color: var(--color-terracotta);
+}
+
+.detail-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detail-title-row h1 {
+  margin: 0 0 4px;
+  font-size: 1.8rem;
+  font-weight: 800;
+}
+
+.detail-breed {
+  color: var(--color-text);
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+  font-weight: 500;
+}
+
+/* Age/Sex/Size "trait chips" under the breed line -- bigger and bolder than the old plain
+   dot-separated subtitle line, per feedback that it was too small/hard to read. Loosely inspired
+   by Petfinder's icon+label physical-traits layout, but built from this app's own chip/pill
+   language (see .attr-tag below) and emoji set rather than copying their specific design. */
+.detail-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.detail-trait {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  font-size: 1.05rem;
+  color: var(--color-text);
+}
+
+.detail-trait__icon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.detail-trait strong {
+  font-weight: 800;
+  color: var(--color-terracotta-dark);
+}
+
+.urgent-banner {
+  background: var(--color-urgent);
+  color: #fff;
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.attr-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 20px;
+}
+
+.attr-tag {
+  background: var(--color-sage-light);
+  color: var(--color-sage);
+  filter: brightness(0.7);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 1.1rem;
+}
+
+.pet-description {
+  /* Preserves the newlines stripDescriptionHtml() inserts between former paragraphs/<br>s,
+     while still collapsing runs of plain spaces -- without needing to inject raw HTML. */
+  white-space: pre-line;
+}
+
+.shelter-card p {
+  margin: 4px 0;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+}
+
+/* The shelter's address, made clickable (opens Google Maps, same destination as the "Open in
+   Maps" button below it) with a small pin icon that lifts on hover/focus -- a plain CSS
+   transform + easing curve, no JS needed, in the spirit of pens like
+   https://codepen.io/bobbyjnichols/pen/WYMzMd (a map-pin hover effect built the exact same way:
+   pure CSS, no map image required for the interaction itself). */
+.shelter-address {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 4px 0;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  text-decoration: none;
+}
+
+.shelter-address:hover,
+.shelter-address:focus-visible {
+  text-decoration: underline;
+  color: var(--color-terracotta-dark);
+}
+
+.shelter-address__pin {
+  display: inline-block;
+  transition: transform 0.25s cubic-bezier(0.645, 0.045, 0.355, 1), filter 0.25s ease;
+}
+
+.shelter-address:hover .shelter-address__pin,
+.shelter-address:focus-visible .shelter-address__pin {
+  transform: translateY(-4px);
+  filter: drop-shadow(0 4px 3px rgba(43, 36, 32, 0.35));
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  border: none;
+  cursor: pointer;
+}
+
+.btn--primary {
+  background: var(--color-terracotta);
+  color: #fff;
+}
+
+.btn--secondary {
+  background: var(--color-sage-light);
+  color: var(--color-terracotta-dark);
+}
+
+/* The "pull apart" share pill (desktop -- see buildSharePull() in pet.js for when the device has
+   no native share sheet to fall back to instead) -- a "Share" pill that expands on hover/tap into
+   real share-target icons, inspired by https://codepen.io/RobVermeer/pen/aNYQMx. Rests looking
+   exactly like the plain .btn--secondary pill it replaces, then grows and swaps its label for
+   icons -- reimplemented as a width/opacity transition rather than that pen's own absolutely
+   stacked icons, since this pill's resting width already has to match the other hero buttons. */
+.share-pull {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  min-width: 96px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--color-sage-light);
+  color: var(--color-terracotta-dark);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: width 0.3s ease-in-out, padding 0.3s ease-in-out, background 0.3s ease-in-out;
+}
+
+.share-pull--expanded {
+  width: 190px;
+  padding: 0 8px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.share-pull__label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.share-pull--expanded .share-pull__label {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.share-pull__icons {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease-in-out;
+}
+
+.share-pull--expanded .share-pull__icons {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.share-pull__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+  font-size: 0.95rem;
+  text-decoration: none;
+  color: inherit;
+  border: none;
+  cursor: pointer;
+  transform: scale(0.4);
+  opacity: 0;
+  flex-shrink: 0;
+  /* An elastic "pop" overshoot (borrowed from the bounce curve in
+     https://codepen.io/chrisdothtml/pen/azPYqq) rather than a plain ease -- icons spring out past
+     full size before settling, which reads as more alive than a linear scale-up. */
+  transition: transform 0.35s cubic-bezier(0.31, -0.105, 0.43, 1.59), opacity 0.25s ease-in-out,
+    background 0.2s ease, color 0.2s ease;
+}
+
+.share-pull__icon svg {
+  display: block;
+  pointer-events: none;
+}
+
+.share-pull--expanded .share-pull__icon {
+  transform: scale(1);
+  opacity: 1;
+}
+
+/* A slight stagger per icon on the way out -- closer to the "pulling apart" feel of the
+   referenced pen than every icon popping in at once. */
+.share-pull--expanded .share-pull__icon:nth-child(1) { transition-delay: 0s; }
+.share-pull--expanded .share-pull__icon:nth-child(2) { transition-delay: 0.03s; }
+.share-pull--expanded .share-pull__icon:nth-child(3) { transition-delay: 0.06s; }
+.share-pull--expanded .share-pull__icon:nth-child(4) { transition-delay: 0.09s; }
+
+.share-pull__icon--twitter:hover { background: #1d9bf0; color: #fff; }
+.share-pull__icon--facebook:hover { background: #3b5998; color: #fff; }
+.share-pull__icon--whatsapp:hover { background: #25d366; color: #fff; }
+.share-pull__icon--copy:hover { background: var(--color-terracotta); color: #fff; }
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 14px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.source-banner {
+  background: var(--color-sage-light);
+  color: var(--color-sage);
+  filter: brightness(0.75);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+/* Landing page */
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #fff;
+  padding: 64px 20px;
+  background: linear-gradient(135deg, var(--color-terracotta) 0%, var(--color-terracotta-dark) 55%, var(--color-sage) 100%);
+}
+
+.hero::before,
+.hero::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(50px);
+  opacity: 0.35;
+  z-index: 0;
+}
+
+.hero::before {
+  width: 280px;
+  height: 280px;
+  background: #fff;
+  top: -100px;
+  left: -70px;
+}
+
+.hero::after {
+  width: 240px;
+  height: 240px;
+  background: var(--color-sage-light);
+  bottom: -100px;
+  right: -50px;
+}
+
+.hero__content {
+  position: relative;
+  z-index: 1;
+  max-width: 640px;
+}
+
+.hero__content h2 {
+  margin: 0 0 12px;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.hero__content > p {
+  margin: 0 0 28px;
+  font-size: 1.1rem;
+  opacity: 0.95;
+}
+
+.hero__search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 10px;
+  border-radius: 999px;
+}
+
+.hero__search select,
+.hero__search input {
+  border: none;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font-size: 0.95rem;
+}
+
+.hero__search input {
+  max-width: 130px;
+}
+
+.hero__search .btn {
+  padding: 12px 26px;
+}
+
+/* Once Select2 upgrades the hero's Species/State dropdowns (see landing.js), give them a bolder,
+   pill-shaped treatment here instead of the plainer, more utilitarian sidebar styling further
+   below -- the hero bar is this app's most prominent search entry point, so it should feel more
+   vivid than a filter sidebar, not the same flat little box. */
+.hero__search .select2-container {
+  margin: 0;
+}
+
+.hero__search .select2-container--default .select2-selection--single {
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  padding: 10px 20px;
+  height: auto;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  transition: box-shadow 0.15s ease;
+}
+
+.hero__search .select2-container--default .select2-selection--single .select2-selection__rendered {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+  padding: 0;
+}
+
+.hero__search .select2-container--default .select2-selection--single .select2-selection__arrow {
+  right: 10px;
+}
+
+.hero__search .select2-container--default.select2-container--open .select2-selection--single,
+.hero__search .select2-container--default.select2-container--focus .select2-selection--single {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.species-option {
+  display: inline-flex;
+  align-items: center;
+}
+
+.category-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+  margin: 28px 0;
+}
+
+.category-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 20px 10px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.category-tile__icon {
+  font-size: 2rem;
+}
+
+.category-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
+}
+
+.landing-section {
+  margin: 44px 0;
+}
+
+.landing-section h2 {
+  font-size: 1.4rem;
+  margin: 0 0 16px;
+}
+
+.location-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  margin: 0 0 10px;
+}
+
+.location-banner__reset {
+  color: var(--color-terracotta-dark);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+/* Plain-select fallback for the state and breed filters, used if the Select2 CDN scripts fail to
+   load (see browse.js's initStateDropdown/initBreedDropdown) -- kept visually consistent with the
+   other filter inputs so the fallback never looks broken, just slightly less fancy than Select2. */
+.filter-state-select,
+.filter-breed-select {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 0.88rem;
+}
+
+/* Select2 (https://select2.org) theming for the same field, once the CDN scripts load and
+   browse.js upgrades it into a searchable dropdown -- restyled to match this app's rounded,
+   pastel design system instead of Select2's own default look. */
+.select2-container--default .select2-selection--single {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  border-radius: var(--radius-sm);
+  height: auto;
+  padding: 7px 12px;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+  color: var(--color-text);
+  font-size: 0.88rem;
+  line-height: 1.4;
+  padding: 0;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__placeholder {
+  color: var(--color-text-muted);
+}
+
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+  height: 100%;
+  top: 0;
+  right: 6px;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__clear {
+  margin-right: 8px;
+}
+
+.select2-container--default.select2-container--focus .select2-selection--single,
+.select2-container--default.select2-container--open .select2-selection--single {
+  border-color: var(--color-terracotta-dark);
+}
+
+.select2-dropdown {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+  background: var(--color-terracotta-dark);
+}
+
+.select2-search--dropdown .select2-search__field {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+}
+
+/* Per-state flag icons in the Select2 state dropdown (both the open list and the closed-box
+   selection) -- see `formatStateOption()` in browse.js. */
+.state-option {
+  display: flex;
+  align-items: center;
+}
+
+.state-flag-icon {
+  width: 20px;
+  height: 13px;
+  margin-right: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.select2-selection__rendered .state-option {
+  display: inline-flex;
+}
+
+.rescuegroups-credit {
+  background: var(--color-sage-light);
+  border-radius: var(--radius-lg);
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.rescuegroups-credit p {
+  max-width: 640px;
+  margin: 0 auto 20px;
+  color: var(--color-text);
+  line-height: 1.6;
+}
+
+.app-footer {
+  border-top: 1px solid var(--color-border);
+  padding: 20px;
+  text-align: center;
+}
+
+.app-footer p {
+  max-width: 720px;
+  margin: 0 auto;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.app-footer a {
+  color: var(--color-terracotta-dark);
+  font-weight: 700;
+}
+
+.app-footer__credit {
+  margin-top: 6px;
+}
+
+/* About page (public/about.html) -- reuses this file's existing `.landing-section`/`.card`-style
+   visual language rather than introducing a new look, so it reads as part of the same app instead
+   of a bolted-on marketing page. */
+.about-hero {
+  text-align: center;
+  padding: 36px 20px 4px;
+}
+
+.about-hero h2 {
+  margin: 0 0 10px;
+  font-size: 1.6rem;
+}
+
+.about-hero p {
+  max-width: 620px;
+  margin: 0 auto;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.about-section {
+  margin: 36px 0;
+}
+
+.about-section h2 {
+  font-size: 1.25rem;
+  margin: 0 0 12px;
+}
+
+.about-section > p {
+  max-width: 760px;
+  line-height: 1.7;
+  color: var(--color-text);
+}
+
+.about-feature-list {
+  max-width: 620px;
+  margin: 0;
+  padding-left: 22px;
+  color: var(--color-text);
+  line-height: 1.9;
+}
+
+.about-creator {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  background: var(--color-sage-light);
+  border-radius: var(--radius-lg);
+  padding: 28px 24px;
+}
+
+.about-creator__avatar {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+  border: 3px solid var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.about-creator__text h2 {
+  margin: 0 0 8px;
+}
+
+.about-creator__text p {
+  margin: 0 0 14px;
+  color: var(--color-text);
+  line-height: 1.6;
+  max-width: 560px;
+}
+
+/* The "why this matters" story panel -- a taller portrait photo (Ronnie and Oreo) next to text.
+   Kept separate from .about-creator's own layout above since a portrait photo this shape would
+   look cropped/awkward forced into the small circular avatar treatment used there. */
+.about-story {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+.about-story__photo {
+  width: 220px;
+  height: auto;
+  border-radius: var(--radius-lg);
+  flex-shrink: 0;
+  box-shadow: var(--shadow-card);
+}
+
+.about-story__text h2 {
+  margin: 0 0 10px;
+}
+
+.about-story__text p {
+  margin: 0 0 10px;
+  color: var(--color-text);
+  line-height: 1.7;
+  max-width: 520px;
+}
+
+.about-story__text p:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 560px) {
+  .about-story {
+    flex-direction: column;
+  }
+  .about-story__photo {
+    width: 100%;
+    max-width: 280px;
+  }
+}
+
+@media (max-width: 560px) {
+  .about-creator {
+    flex-direction: column;
+    text-align: center;
+  }
+  .about-creator__text p {
+    max-width: none;
+  }
+}

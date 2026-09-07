@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AdoptScout</title>
+  <link rel="icon" type="image/svg+xml" href="img/logo-icon.svg" />
+  <!-- Select2 (https://select2.org) powers the hero search's Species/State dropdowns below, same
+       as the Browse page's filters -- loaded from CDN, no build step or package manager, matching
+       how this whole app is put together. Pinned versions so a CDN update never changes this
+       page's behavior underneath it. -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-header__top">
+      <h1><a href="index.html" class="brand"><img src="img/logo-icon.svg" alt="" class="brand__logo" width="32" height="32" />AdoptScout</a></h1>
+      <nav class="app-nav">
+        <a href="index.html" class="active">Home</a>
+        <a href="browse.html">Browse</a>
+        <a href="favorites.html">Favorites</a>
+        <a href="about.html">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="hero__content">
+      <h2>Find your new best friend</h2>
+      <p>Browse adoptable pets from shelters and rescues nationwide.</p>
+      <form class="hero__search" id="hero-search">
+        <select id="hero-species" aria-label="Species">
+          <option value="">Any species</option>
+          <option value="Dog">Dogs</option>
+          <option value="Cat">Cats</option>
+          <option value="Rabbit">Rabbits</option>
+          <option value="Bird">Birds</option>
+        </select>
+        <select id="hero-state" aria-label="State">
+          <option value="">Any state</option>
+        </select>
+        <button type="submit" class="btn btn--primary">Find pets</button>
+      </form>
+    </div>
+  </section>
+
+  <main class="container">
+    <div class="category-tiles">
+      <a class="category-tile" href="browse.html?species=Dog"><span class="category-tile__icon">🐶</span><span>Dogs</span></a>
+      <a class="category-tile" href="browse.html?species=Cat"><span class="category-tile__icon">🐱</span><span>Cats</span></a>
+      <a class="category-tile" href="browse.html?species=Rabbit"><span class="category-tile__icon">🐰</span><span>Rabbits</span></a>
+      <a class="category-tile" href="browse.html?species=Bird"><span class="category-tile__icon">🐦</span><span>Birds</span></a>
+      <a class="category-tile" href="browse.html"><span class="category-tile__icon">🐾</span><span>All pets</span></a>
+    </div>
+
+    <section class="landing-section">
+      <p id="location-banner" class="location-banner" hidden></p>
+      <h2 id="featured-title">Meet some pets</h2>
+      <div class="pet-grid" id="featured-grid"></div>
+      <a href="browse.html" class="btn btn--secondary" style="margin-top:16px;">See all pets →</a>
+    </section>
+
+    <section class="landing-section rescuegroups-credit">
+      <h2>🙏 Powered by RescueGroups.org</h2>
+      <p>
+        Every pet listing you see here comes from RescueGroups.org's public API, which
+        aggregates real-time listings from thousands of independent animal shelters and rescue
+        groups across the country. This project wouldn't exist without the work RescueGroups.org
+        does connecting adopters to the organizations actually doing the rescuing — sincere
+        thanks to them for making that data available to build with.
+      </p>
+      <a class="btn btn--secondary" href="https://rescuegroups.org" target="_blank" rel="noopener">Visit RescueGroups.org →</a>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>Pet data provided by <a href="https://rescuegroups.org" target="_blank" rel="noopener">RescueGroups.org</a>, which aggregates listings from thousands of shelters and rescues nationwide. AdoptScout is an independent project and is not affiliated with or endorsed by RescueGroups.org.</p>
+    <p class="app-footer__credit">Created by <a href="https://www.linkedin.com/in/jose-lopez-jr/" target="_blank" rel="noopener">Jose Lopez Jr</a> · <a href="about.html">About this project</a></p>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/landing.js"></script>
+</body>
+</html>

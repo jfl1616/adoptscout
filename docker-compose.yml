@@ -1,0 +1,18 @@
+services:
+  adoptscout-web:
+    build: .
+    container_name: adoptscout-web
+    restart: unless-stopped
+    environment:
+      # Set this in Portainer's stack environment variables (or a .env file next to this
+      # compose file) -- never commit a real key into this file. Leave it blank/unset to run
+      # on sample data instead of live RescueGroups.org listings.
+      - RESCUEGROUPS_API_KEY=${RESCUEGROUPS_API_KEY:-}
+      - PORT=3000
+    ports:
+      # host:container -- change the host side (left of the colon) if 3000 is already taken on
+      # your server. If you're routing through an nginx reverse proxy on the SAME Docker host,
+      # you can instead delete this `ports:` block entirely and have nginx proxy to
+      # http://adoptscout-web:3000 over a shared Docker network -- see README's "Deploying"
+      # section for both options.
+      - "3000:3000"

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="AdoptScout logo">
+  <title>AdoptScout</title>
+  <defs>
+    <linearGradient id="adoptscout-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#c96f4a"/>
+      <stop offset="100%" stop-color="#a85736"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Badge background -->
+  <rect x="2" y="2" width="96" height="96" rx="24" fill="url(#adoptscout-bg)"/>
+
+  <!-- Paw print: one main pad + four toes -->
+  <ellipse cx="45" cy="65" rx="20" ry="16" fill="#ffffff"/>
+  <g fill="#ffffff">
+    <ellipse cx="23" cy="47" rx="8" ry="10" transform="rotate(-18 23 47)"/>
+    <ellipse cx="37" cy="30" rx="8.5" ry="10.5" transform="rotate(-6 37 30)"/>
+    <ellipse cx="53" cy="30" rx="8.5" ry="10.5" transform="rotate(6 53 30)"/>
+    <ellipse cx="67" cy="47" rx="8" ry="10" transform="rotate(18 67 47)"/>
+  </g>
+
+  <!-- "Scout" magnifying glass, its lens cut through to the badge color so it reads as
+       searching/finding the paw, sitting over the bottom-right of the print -->
+  <circle cx="72" cy="72" r="15" fill="url(#adoptscout-bg)" stroke="#8fa37e" stroke-width="6"/>
+  <line x1="82" y1="82" x2="93" y2="93" stroke="#8fa37e" stroke-width="7" stroke-linecap="round"/>
+</svg>
