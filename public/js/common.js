@@ -412,6 +412,106 @@ function initStateSelect2(selectEl, { onChange, placeholder, width } = {}) {
   return { setValue };
 }
 
+/**
+ * Header behavior shared by all five pages: a scroll-aware sticky header (glassy/transparent at
+ * the top of the page, solid with a shadow once scrolled -- see `.app-header--scrolled` in
+ * styles.css) and, on narrow screens, a hamburger-triggered slide-in nav drawer. Runs
+ * automatically on every page that has a `.app-header` (this file is loaded on all of them,
+ * including about.html which has no other JS) -- there's nothing page-specific to opt into.
+ *
+ * The drawer replaces what used to be a plain horizontal nav that quietly overflowed/got clipped
+ * on narrow phones (the "About" link showing as just "Ab...", reported after AdoptScout first
+ * went live) -- see styles.css's `@media (max-width: 700px)` block for the drawer's own layout.
+ */
+function initHeader() {
+  const header = document.querySelector('.app-header');
+  if (!header) return;
+
+  const nav = header.querySelector('.app-nav');
+  const toggle = header.querySelector('.nav-toggle');
+  const scrim = header.querySelector('.nav-scrim');
+
+  // "Vercel tabs"-style sliding underline: one indicator span, moved under whichever link is
+  // hovered, that snaps back under the current page's .active link when the pointer leaves the
+  // nav entirely. See the .app-nav__indicator comment in styles.css for the visual reasoning.
+  // Desktop-only -- the mobile drawer below uses a left-border accent instead (an underline
+  // doesn't read the same way under a stacked vertical list).
+  if (nav) {
+    const indicator = document.createElement('span');
+    indicator.className = 'app-nav__indicator';
+    indicator.setAttribute('aria-hidden', 'true');
+    nav.appendChild(indicator);
+
+    const isDesktopNav = () => window.matchMedia('(min-width: 701px)').matches;
+
+    function moveIndicatorTo(link) {
+      if (!link) {
+        indicator.style.width = '0';
+        return;
+      }
+      indicator.style.width = `${link.offsetWidth}px`;
+      indicator.style.transform = `translateX(${link.offsetLeft}px)`;
+    }
+
+    function syncIndicatorToActive() {
+      if (!isDesktopNav()) return;
+      moveIndicatorTo(nav.querySelector('a.active'));
+    }
+
+    nav.querySelectorAll('a').forEach((link) => {
+      link.addEventListener('mouseenter', () => {
+        if (isDesktopNav()) moveIndicatorTo(link);
+      });
+    });
+    nav.addEventListener('mouseleave', syncIndicatorToActive);
+
+    syncIndicatorToActive();
+    // Re-measure after fonts/layout settle, and whenever the viewport crosses the drawer
+    // breakpoint or is resized -- offsetLeft/offsetWidth are only meaningful once the row has
+    // actually laid out at its final size.
+    window.addEventListener('load', syncIndicatorToActive);
+    window.addEventListener('resize', syncIndicatorToActive);
+  }
+
+  if (!toggle || !nav) return;
+
+  function closeMenu() {
+    nav.classList.remove('app-nav--open');
+    if (scrim) scrim.classList.remove('nav-scrim--visible');
+    toggle.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('nav-open-lock');
+  }
+
+  function openMenu() {
+    nav.classList.add('app-nav--open');
+    if (scrim) scrim.classList.add('nav-scrim--visible');
+    toggle.setAttribute('aria-expanded', 'true');
+    document.body.classList.add('nav-open-lock');
+  }
+
+  toggle.addEventListener('click', () => {
+    const isOpen = nav.classList.contains('app-nav--open');
+    if (isOpen) closeMenu(); else openMenu();
+  });
+  if (scrim) scrim.addEventListener('click', closeMenu);
+  nav.querySelectorAll('a').forEach((link) => link.addEventListener('click', closeMenu));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMenu();
+  });
+  // Resizing (or rotating) past the drawer breakpoint while it's open would otherwise leave the
+  // drawer's open state (and the body scroll lock) stuck even once .app-nav is back to laying
+  // out horizontally.
+  window.matchMedia('(min-width: 701px)').addEventListener('change', (e) => {
+    if (e.matches) closeMenu();
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initHeader);
+} else {
+  initHeader();
+}
+
 window.AdoptScout = {
   getFavorites, saveFavorites, isFavorite, toggleFavorite,
   fetchJSON, speciesEmoji, el, renderPetCard, googleMapsUrl,

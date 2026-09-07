@@ -58,18 +58,19 @@ a {
 .app-header {
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 40;
+  padding: 16px 20px;
   background: var(--color-bg);
   border-bottom: 1px solid var(--color-border);
-  padding: 16px 20px;
 }
 
 .app-header__top {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   max-width: 1100px;
   margin: 0 auto 4px;
+  gap: 12px;
 }
 
 .app-header h1 {
@@ -94,23 +95,162 @@ a {
   display: block;
 }
 
+/* "Vercel tabs"-style nav (21st.dev/@yadwinder/components/vercel-tabs was the reference point) --
+   plain text links, no pill background, with a thin underline that slides between tabs instead
+   of sitting fixed under one. Reimplemented in plain CSS/JS rather than that component's React
+   version, since a real DOM measurement + CSS transform does the same job:
+   `.app-nav__indicator` (created in initHeader(), common.js) is one absolutely-positioned span
+   that gets moved (via `transform: translateX()` + `width`) under whichever link is hovered, and
+   snaps back under the current page's `.active` link on mouseleave -- so it always reflects
+   either "what you're pointing at" or "where you actually are". */
 .app-nav {
+  position: relative;
   display: flex;
-  gap: 16px;
+  gap: 20px;
   font-weight: 600;
   font-size: 0.95rem;
 }
 
 .app-nav a {
   color: var(--color-text-muted);
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
+  padding: 6px 2px;
+  transition: color 0.2s ease;
 }
 
-.app-nav a.active,
+.app-nav a.active {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
 .app-nav a:hover {
   color: var(--color-terracotta-dark);
+}
+
+.app-nav__indicator {
+  position: absolute;
+  left: 0;
+  bottom: -7px;
+  height: 2px;
+  width: 0;
+  background: var(--color-terracotta);
+  border-radius: 2px;
+  transform: translateX(0);
+  transition: transform 0.3s cubic-bezier(0.65, 0, 0.35, 1), width 0.3s cubic-bezier(0.65, 0, 0.35, 1);
+  pointer-events: none;
+}
+
+/* Hamburger toggle -- hidden entirely above the 700px breakpoint below, where .app-nav has room
+   to lay out horizontally. Below it, .app-nav becomes a slide-in drawer and this becomes its
+   visible control. The three bars morph into an X (via aria-expanded, no extra JS state needed)
+   so the icon itself communicates open/closed. */
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.nav-toggle:hover,
+.nav-toggle:focus-visible {
   background: var(--color-sage-light);
+}
+
+.nav-toggle__bar {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: var(--color-text);
+  border-radius: 2px;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.nav-toggle[aria-expanded="true"] .nav-toggle__bar:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.nav-toggle[aria-expanded="true"] .nav-toggle__bar:nth-child(2) {
+  opacity: 0;
+}
+
+.nav-toggle[aria-expanded="true"] .nav-toggle__bar:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* Dims the page behind the open drawer and gives it a tap target to close by. Sits below the
+   header/drawer (which need to stay usable) but above everything else. */
+.nav-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(43, 36, 32, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 39;
+}
+
+.nav-scrim--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Locks background scroll while the drawer is open (toggled on <body> from common.js). */
+body.nav-open-lock {
+  overflow: hidden;
+}
+
+@media (max-width: 700px) {
+  .nav-toggle {
+    display: inline-flex;
+  }
+
+  .app-nav {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: min(280px, 80vw);
+    background: var(--color-surface);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding: 84px 20px 20px;
+    box-shadow: -8px 0 28px rgba(43, 36, 32, 0.18);
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    z-index: 41;
+  }
+
+  .app-nav--open {
+    transform: translateX(0);
+  }
+
+  .app-nav a {
+    padding: 12px 14px;
+    font-size: 1.05rem;
+    border-radius: var(--radius-sm);
+  }
+
+  /* The sliding underline is a horizontal-row effect; in the stacked drawer it's replaced with a
+     left-border accent, matching the same "current section" treatment already used by the
+     pet-detail page's left TOC (.detail-toc__link--active). */
+  .app-nav__indicator {
+    display: none;
+  }
+
+  .app-nav a.active {
+    background: var(--color-sage-light);
+    border-left: 3px solid var(--color-terracotta);
+    padding-left: 11px;
+  }
 }
 
 .app-header__subtitle {
@@ -478,6 +618,13 @@ a {
   }
   html {
     scroll-behavior: auto;
+  }
+  .app-nav,
+  .app-nav__indicator,
+  .app-nav a,
+  .nav-scrim,
+  .nav-toggle__bar {
+    transition: none;
   }
 }
 
