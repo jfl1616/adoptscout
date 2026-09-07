@@ -1,4 +1,12 @@
+/* Deliberately light-only: every visual (photos, logo, the terracotta/sage palette) was designed
+   and tuned against this light background. A `prefers-color-scheme: dark` override used to live
+   here, but it only swapped 6 base variables and never touched the brand colors, hero gradient,
+   state flags, or photos -- so a visitor with dark mode on got a half-themed mismatch rather than
+   an actual dark design. `color-scheme: light` tells the browser this page is intentionally
+   light-only, so it renders native form controls/scrollbars in light style too instead of
+   guessing. */
 :root {
+  color-scheme: light;
   --color-bg: #fff8f3;
   --color-surface: #ffffff;
   --color-text: #2b2420;
@@ -15,17 +23,6 @@
   --radius-sm: 8px;
   --shadow-card: 0 4px 16px rgba(43, 36, 32, 0.08);
   --shadow-card-hover: 0 10px 28px rgba(43, 36, 32, 0.16);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #201b17;
-    --color-surface: #2b2420;
-    --color-text: #f5ede4;
-    --color-text-muted: #b8aca1;
-    --color-border: #3d342c;
-    --color-sage-light: #2f3a2a;
-  }
 }
 
 * {
