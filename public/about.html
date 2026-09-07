@@ -11,13 +11,19 @@
   <header class="app-header">
     <div class="app-header__top">
       <h1><a href="index.html" class="brand"><img src="img/logo-icon.svg" alt="" class="brand__logo" width="32" height="32" />AdoptScout</a></h1>
-      <nav class="app-nav">
+      <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="app-nav" aria-label="Open menu">
+        <span class="nav-toggle__bar"></span>
+        <span class="nav-toggle__bar"></span>
+        <span class="nav-toggle__bar"></span>
+      </button>
+      <nav class="app-nav" id="app-nav">
         <a href="index.html">Home</a>
         <a href="browse.html">Browse</a>
         <a href="favorites.html">Favorites</a>
         <a href="about.html" class="active">About</a>
       </nav>
     </div>
+    <div class="nav-scrim"></div>
   </header>
 
   <main class="container">
@@ -97,5 +103,9 @@
     <p>Pet data provided by <a href="https://rescuegroups.org" target="_blank" rel="noopener">RescueGroups.org</a>, which aggregates listings from thousands of shelters and rescues nationwide. AdoptScout is an independent project and is not affiliated with or endorsed by RescueGroups.org.</p>
     <p class="app-footer__credit">Created by <a href="https://www.linkedin.com/in/jose-lopez-jr/" target="_blank" rel="noopener">Jose Lopez Jr</a></p>
   </footer>
+
+  <!-- About has no other dynamic behavior, but still needs common.js for the shared scroll-aware
+       header + mobile nav drawer (initHeader()), which every page now uses. -->
+  <script src="js/common.js"></script>
 </body>
 </html>
