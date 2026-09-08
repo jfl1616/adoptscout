@@ -295,5 +295,34 @@ test('mock getMockUrgentPets narrows to a state when one is passed (backs the la
   assert.deepStrictEqual(urgentTX, []);
 });
 
+test('mock search filters by city (backs the new Browse page City dropdown)', () => {
+  // Rocket and Clementine are the only two pets at the Long Beach shelter (mock-2).
+  const { pets } = mock.getMockPets({ state: 'CA', city: 'Long Beach' });
+  assert.deepStrictEqual(pets.map((p) => p.name).sort(), ['Clementine', 'Rocket']);
+});
+
+test('mock search by city is case-insensitive and ignores extra whitespace', () => {
+  const { pets } = mock.getMockPets({ state: 'CA', city: '  long beach  ' });
+  assert.deepStrictEqual(pets.map((p) => p.name).sort(), ['Clementine', 'Rocket']);
+});
+
+test('mock search by a city with no matching shelter returns no pets', () => {
+  const { pets } = mock.getMockPets({ state: 'CA', city: 'Sacramento' });
+  assert.deepStrictEqual(pets, []);
+});
+
+test('mock getMockCitiesForState returns the distinct, sorted real cities in that state', () => {
+  assert.deepStrictEqual(mock.getMockCitiesForState('CA'), ['Long Beach', 'Los Angeles', 'San Pedro']);
+});
+
+test('mock getMockCitiesForState returns an empty list for a state with no mock shelters', () => {
+  assert.deepStrictEqual(mock.getMockCitiesForState('TX'), []);
+});
+
+test('mock getMockCitiesForState returns an empty list when no state is given', () => {
+  assert.deepStrictEqual(mock.getMockCitiesForState(), []);
+  assert.deepStrictEqual(mock.getMockCitiesForState(''), []);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

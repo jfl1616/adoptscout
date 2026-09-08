@@ -27,16 +27,17 @@ function parseListParam(value) {
  * GET /api/pets
  * Query params: species (comma-separated -- the browse page's checkbox groups let a visitor
  * pick more than one), age (comma-separated), gender (comma-separated), breed (free-text
- * contains search), size (comma-separated), state, q (name search), urgentOnly (true/false,
- * filtered client-side below), page (1-based), pageSize.
+ * contains search), size (comma-separated), state, city (only meaningful together with state --
+ * see getCitiesForState's doc), q (name search), urgentOnly (true/false, filtered client-side
+ * below), page (1-based), pageSize.
  *
- * species/age/gender/breed/size/state/q are all sent to RescueGroups (or matched in mock.js) as
- * real filters now. `urgentOnly` is the one exception that's still applied AFTER the page is
- * fetched, since "field is non-blank" isn't a confirmed RescueGroups filter operation -- there's
- * no single field to filter on, only this app's own heuristic computed from two other fields.
- * Because of that, a page can still come back smaller than pageSize when urgentOnly is checked
- * even though more urgent pets exist further in -- a known, documented limitation (see README)
- * that no longer applies to size now that it's a real server-side filter.
+ * species/age/gender/breed/size/state/city/q are all sent to RescueGroups (or matched in
+ * mock.js) as real filters now. `urgentOnly` is the one exception that's still applied AFTER the
+ * page is fetched, since "field is non-blank" isn't a confirmed RescueGroups filter operation --
+ * there's no single field to filter on, only this app's own heuristic computed from two other
+ * fields. Because of that, a page can still come back smaller than pageSize when urgentOnly is
+ * checked even though more urgent pets exist further in -- a known, documented limitation (see
+ * README) that no longer applies to size now that it's a real server-side filter.
  */
 router.get('/', async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -50,6 +51,7 @@ router.get('/', async (req, res) => {
     breed: req.query.breed || undefined,
     sizes: parseListParam(req.query.size),
     state: req.query.state || undefined,
+    city: req.query.city || undefined,
     q: req.query.q || undefined,
     resultStart: (page - 1) * pageSize,
     resultLimit: pageSize
@@ -87,6 +89,27 @@ router.get('/', async (req, res) => {
       hasMore: foundRows > page * pageSize,
       source
     });
+  } catch (err) {
+    res.status(502).json({ error: err.message || 'Failed to reach RescueGroups' });
+  }
+});
+
+/** GET /api/pets/cities?state=XX -- distinct real shelter city names within a state, for the
+ * Browse page's City dropdown (see getCitiesForState's doc for why this is a dropdown of real
+ * values rather than a free-text box, and why it only makes sense once a state is chosen).
+ * Registered ahead of the `/:id` route below so a request for "cities" doesn't get swallowed as
+ * a pet-detail lookup for an animal literally named "cities". */
+router.get('/cities', async (req, res) => {
+  const state = req.query.state || undefined;
+  if (!state) {
+    res.json({ cities: [] });
+    return;
+  }
+  try {
+    const cities = usingRealData()
+      ? await rescueGroups.getCitiesForState(state)
+      : mock.getMockCitiesForState(state);
+    res.json({ cities });
   } catch (err) {
     res.status(502).json({ error: err.message || 'Failed to reach RescueGroups' });
   }

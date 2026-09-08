@@ -1327,7 +1327,8 @@ body.nav-open-lock {
    load (see browse.js's initStateDropdown/initBreedDropdown) -- kept visually consistent with the
    other filter inputs so the fallback never looks broken, just slightly less fancy than Select2. */
 .filter-state-select,
-.filter-breed-select {
+.filter-breed-select,
+.filter-city-select {
   display: block;
   width: 100%;
   border: 1px solid var(--color-border);
@@ -1336,6 +1337,17 @@ body.nav-open-lock {
   border-radius: var(--radius-sm);
   padding: 8px 12px;
   font-size: 0.88rem;
+}
+
+/* City only means anything once a state is picked (see getCitiesForState's doc) -- dimmed and
+   inert until then, both as the plain-select fallback and as the Select2 upgrade (targeted via
+   the wrapping #filter-city + .select2-container, since Select2 replaces the element itself). */
+.filter-city-select {
+  margin-top: 8px;
+}
+.filter-city-select:disabled,
+#filter-city + .select2-container.select2-container--disabled {
+  opacity: 0.55;
 }
 
 /* Select2 (https://select2.org) theming for the same field, once the CDN scripts load and

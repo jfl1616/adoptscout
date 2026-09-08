@@ -49,9 +49,13 @@ const URGENT_LISTED_DAYS_THRESHOLD = 60;
  * scanning every listing). */
 const URGENT_SCAN_SIZE = 100;
 
-/** Per-state shelter-ID cache (in-memory, resets on server restart) so re-searching within the
- * same state doesn't re-fetch the shelter list every time. */
-const stateOrgIdsCache = new Map();
+/** Per-state shelter cache (in-memory, resets on server restart) so re-searching within the same
+ * state doesn't re-fetch the shelter list every time. Keyed by state code, valued as an array of
+ * `{ id, city }` -- keeping city alongside id (instead of the old id-only cache) is what makes
+ * both the city dropdown (distinct cities per state) and city-narrowed search (filter this list
+ * by city, then filter animals by the resulting org IDs) possible with zero extra API calls,
+ * since `orgCity` is already part of ORG_FIELDS on every request this cache was already making. */
+const stateOrgsCache = new Map();
 
 function apiKey() {
   return process.env.RESCUEGROUPS_API_KEY || '';
@@ -309,13 +313,16 @@ function extractStateCode(location) {
 }
 
 /**
- * Fetches up to 250 shelter IDs in a US state (RescueGroups' page size cap), cached per state
- * for this server process's lifetime. States with more than 250 shelters (California had 766
- * when this was tested) only get the first page -- a sample, not exhaustive coverage.
+ * Fetches up to 250 shelters in a US state (RescueGroups' page size cap) as `{ id, city }` pairs,
+ * cached per state for this server process's lifetime. States with more than 250 shelters
+ * (California had 766 when this was tested) only get the first page -- a sample, not exhaustive
+ * coverage. This is the single fetch both `orgIdsForState` (plain state search) and
+ * `getCitiesForState`/the city-narrowed branch of `searchPets` (city search) build on, so adding
+ * city support didn't cost a second API call per state.
  */
-async function orgIdsForState(stateCode) {
-  if (stateOrgIdsCache.has(stateCode)) {
-    return stateOrgIdsCache.get(stateCode);
+async function orgsForState(stateCode) {
+  if (stateOrgsCache.has(stateCode)) {
+    return stateOrgsCache.get(stateCode);
   }
   const response = await rgRequest('orgs', {
     resultStart: '0',
@@ -323,22 +330,62 @@ async function orgIdsForState(stateCode) {
     filters: [{ fieldName: 'orgState', operation: 'equals', criteria: stateCode }],
     fields: ORG_FIELDS
   });
-  const ids = response.status === 'error'
+  const orgs = response.status === 'error'
     ? []
-    : asRecordList(response.data).map((org) => String(org.orgID)).filter(Boolean);
-  stateOrgIdsCache.set(stateCode, ids);
-  return ids;
+    : asRecordList(response.data)
+      .filter((org) => org.orgID)
+      .map((org) => ({ id: String(org.orgID), city: org.orgCity ? String(org.orgCity).trim() : '' }));
+  stateOrgsCache.set(stateCode, orgs);
+  return orgs;
+}
+
+/** Plain list of org IDs in a state -- what every caller needed before city support existed. */
+async function orgIdsForState(stateCode) {
+  const orgs = await orgsForState(stateCode);
+  return orgs.map((org) => org.id);
+}
+
+/** Just the org IDs in a state whose `orgCity` matches (case-insensitive, exact) the given city --
+ * how a chosen City dropdown value narrows a search, mirroring the org-then-animal two-step
+ * `orgIdsForState` already uses for state alone. Confirmed against the live API (state CA + city
+ * "Downey" narrowed 766 CA orgs down to exactly the 1 real Downey shelter) before this was built. */
+async function orgIdsForStateAndCity(stateCode, city) {
+  const orgs = await orgsForState(stateCode);
+  const target = city.trim().toLowerCase();
+  return orgs.filter((org) => org.city.toLowerCase() === target).map((org) => org.id);
+}
+
+/**
+ * Distinct, alphabetically-sorted list of real city names among a state's cached shelters --
+ * backs the Browse page's City dropdown, which only populates once a State is chosen (see
+ * `extractStateCode`'s doc: RescueGroups has no city-only filter, so a city picker with nothing
+ * to narrow within isn't useful, and a free-text city box was already ruled out separately --
+ * `orgCity contains "Los Angeles"` returned 0 results since shelters register under specific
+ * suburb names, not umbrella city names -- a dropdown of REAL values sidesteps that entirely).
+ */
+async function getCitiesForState(state) {
+  const stateCode = extractStateCode(state);
+  if (!stateCode) return [];
+  const orgs = await orgsForState(stateCode);
+  const seen = new Map(); // lowercase -> first-seen original casing, so dedup doesn't lose display casing
+  orgs.forEach((org) => {
+    if (!org.city) return;
+    const key = org.city.toLowerCase();
+    if (!seen.has(key)) seen.set(key, org.city);
+  });
+  return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
 }
 
 /**
  * Searches available animals nationwide, optionally narrowed by state (via the two-step
- * org-lookup above), species, age, gender, breed, and size -- all sent to RescueGroups as
- * real server-side filters (`equals` for species/age/gender/size, `contains` for name/breed
- * text search). `urgentOnly` is the one filter that still applies CLIENT-SIDE after the page
- * loads (see the route layer), since "field is non-blank" isn't a confirmed RescueGroups filter
- * operation -- everything else here has a real field and a real operation behind it.
+ * org-lookup above), city (a further narrowing of that same org list -- only meaningful together
+ * with state, see getCitiesForState's doc), species, age, gender, breed, and size -- all sent to
+ * RescueGroups as real server-side filters (`equals` for species/age/gender/size, `contains` for
+ * name/breed text search). `urgentOnly` is the one filter that still applies CLIENT-SIDE after
+ * the page loads (see the route layer), since "field is non-blank" isn't a confirmed RescueGroups
+ * filter operation -- everything else here has a real field and a real operation behind it.
  */
-async function searchPets({ species, ages, genders, breed, sizes, state, q, resultStart = 0, resultLimit = 24 } = {}) {
+async function searchPets({ species, ages, genders, breed, sizes, state, city, q, resultStart = 0, resultLimit = 24 } = {}) {
   const filters = [
     { fieldName: 'animalStatus', operation: 'equals', criteria: 'Available' }
   ];
@@ -366,9 +413,14 @@ async function searchPets({ species, ages, genders, breed, sizes, state, q, resu
 
   const stateCode = extractStateCode(state);
   if (stateCode) {
-    const orgIds = await orgIdsForState(stateCode);
+    // A city only narrows anything in combination with a state (see getCitiesForState's doc), so
+    // an orphaned `city` param with no resolvable state is simply ignored here rather than erroring.
+    const orgIds = city && city.trim()
+      ? await orgIdsForStateAndCity(stateCode, city)
+      : await orgIdsForState(stateCode);
     if (orgIds.length === 0) {
-      // No shelters found for this state -- return an empty page rather than an unfiltered one.
+      // No shelters found for this state (or this city within it) -- return an empty page rather
+      // than an unfiltered one.
       return { pets: [], foundRows: 0 };
     }
     filters.push({ fieldName: 'animalOrgID', operation: 'equals', criteria: orgIds });
@@ -458,6 +510,7 @@ module.exports = {
   getPetById,
   getShelterById,
   getUrgentPets,
+  getCitiesForState,
   // Exported for the offline test script (test/run-tests.js) -- pure functions, no network.
   _internal: {
     normalizeSize,

@@ -233,10 +233,20 @@ comments for the full field-by-field story). Quick summary:
   unbuilt): "Good With" kids/dogs/cats (see above), Coat Length, and Color — none of these were
   found as real fields when the animal field list was originally confirmed field-by-field against
   the live API.
-- **Location filtering is state-level only, not city/ZIP/radius.** Type a two-letter state code
-  (or "City, XX" — only the trailing code is read) into the state field. Under the hood this
-  fetches up to 250 shelter IDs in that state (RescueGroups' page cap), then filters animals to
-  just those shelters — for a large state this is a sample, not exhaustive coverage.
+- **Location filtering is state and city, not ZIP/radius/county (added 2026-09-08).** Type a
+  two-letter state code (or "City, XX" — only the trailing code is read) into the state field.
+  Under the hood this fetches up to 250 shelters in that state (RescueGroups' page cap, so for a
+  large state this is a sample, not exhaustive coverage) and caches their IDs *and* city names,
+  which backs two things: filtering animals down to just that state's shelters, and — once a
+  state is chosen — a City dropdown on the Browse page (`GET /api/pets/cities?state=XX`) populated
+  from that state's *real* shelter city names. A free-text city box was deliberately rejected: a
+  live test confirmed `orgCity contains "Los Angeles"` returns 0 results, since shelters register
+  under their own specific suburb/city name, not an umbrella metro name — a dropdown of real
+  values sidesteps that entirely. Picking a city narrows the same cached list to just that city's
+  shelter(s) before filtering animals, confirmed against the live API (state CA + city "Downey"
+  correctly narrowed all 766 CA shelters down to the single real Downey shelter). ZIP-radius and
+  county are still unbuilt — ZIP would need a distance calculation this API doesn't do server-side,
+  and county isn't a field RescueGroups exposes at all.
 - **Name search is server-side `contains` on `animalName` only** — it does not also search
   breed text (that's now its own separate Breed filter, not folded into name search, so the two
   can be combined -- e.g. name contains "Duke" AND breed contains "Shepherd").

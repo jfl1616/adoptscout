@@ -164,7 +164,7 @@ const pets = [
   }
 ];
 
-function matches(pet, { species, ages, genders, breed, sizes, state, q }) {
+function matches(pet, { species, ages, genders, breed, sizes, state, city, q }) {
   // Accepts either a single species string (the landing page's hero search still sends this)
   // or an array (the browse page's checkbox group, which allows picking more than one).
   if (species) {
@@ -178,6 +178,10 @@ function matches(pet, { species, ages, genders, breed, sizes, state, q }) {
   if (state) {
     const shelter = shelters.find((s) => s.id === pet.orgId);
     if (!shelter || shelter.state.toLowerCase() !== String(state).trim().slice(-2).toLowerCase()) return false;
+  }
+  if (city && city.trim()) {
+    const shelter = shelters.find((s) => s.id === pet.orgId);
+    if (!shelter || shelter.city.toLowerCase() !== city.trim().toLowerCase()) return false;
   }
   if (q && q.trim() && !pet.name.toLowerCase().includes(q.trim().toLowerCase())) return false;
   return true;
@@ -202,9 +206,22 @@ function getMockUrgentPets(state) {
   return urgent.filter((p) => matches(p, { state }));
 }
 
+/** Mock equivalent of rescuegroupsService's getCitiesForState -- distinct cities among the
+ * sample shelters in a given state, so the City dropdown has something real to show even without
+ * a live API key configured. */
+function getMockCitiesForState(state) {
+  const stateCode = state ? String(state).trim().slice(-2).toUpperCase() : null;
+  if (!stateCode) return [];
+  const cities = shelters
+    .filter((s) => s.state.toUpperCase() === stateCode)
+    .map((s) => s.city);
+  return Array.from(new Set(cities)).sort((a, b) => a.localeCompare(b));
+}
+
 module.exports = {
   getMockPets,
   getMockPetById,
   getMockShelterById,
-  getMockUrgentPets
+  getMockUrgentPets,
+  getMockCitiesForState
 };

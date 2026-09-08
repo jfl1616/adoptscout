@@ -13,6 +13,7 @@
     q: document.getElementById('filter-q'),
     breed: document.getElementById('filter-breed'),
     state: document.getElementById('filter-state'),
+    city: document.getElementById('filter-city'),
     urgent: document.getElementById('filter-urgent')
   };
 
@@ -170,11 +171,115 @@
 
   /** Builds the state <select> into a Select2 searchable, flag-icon dropdown via the shared
    * initStateSelect2() helper in common.js (also used by the landing page's hero search, so both
-   * look and behave identically). See that helper's own doc for the fallback/no-CDN behavior. */
+   * look and behave identically). See that helper's own doc for the fallback/no-CDN behavior.
+   * A real, visitor-driven state change always resets City -- a previously-picked city almost
+   * certainly doesn't exist in the new state's shelter list -- then kicks off a fresh city-list
+   * fetch for the new state (see loadCitiesForState) before re-running the search. */
   function initStateDropdown() {
     stateSelect = initStateSelect2(form.state, {
-      onChange: () => runSearch()
+      onChange: (code) => {
+        setCityValue('');
+        loadCitiesForState(code);
+        runSearch();
+      }
     });
+  }
+
+  // Set once initCityDropdown() below runs, so setCityValue() doesn't fire a duplicate/premature
+  // search while it's programmatically syncing the field (from a URL param, a state change, or
+  // Clear All) -- same reasoning as suppressBreedChange above.
+  let suppressCityChange = false;
+
+  /** Replaces every option in the City <select> after the first ("Any city") with a fresh list --
+   * used both when a new state's real city list comes back from `/api/pets/cities` and when
+   * clearing the field back to empty. Kept separate from Select2 setup so it can run any time the
+   * underlying state changes, not just once at page load. */
+  function populateCityOptions(cities) {
+    Array.from(form.city.options).slice(1).forEach((opt) => opt.remove());
+    cities.forEach((city) => {
+      const opt = document.createElement('option');
+      opt.value = city;
+      opt.textContent = city;
+      form.city.appendChild(opt);
+    });
+  }
+
+  /** Enables/disables the City field -- it only means anything once a state is chosen and that
+   * state actually has cities to offer (see getCitiesForState's doc).
+   *
+   * Deliberately sets the plain `disabled` property directly rather than calling Select2's own
+   * `.select2('enable', bool)` method -- that method is bugged in the pinned 4.1.0-rc.0 build
+   * (confirmed by reading its actual source): the two-argument form always ends up disabling the
+   * field regardless of which boolean is passed, because of how jQuery's plugin dispatcher calls
+   * `enable(args)` -- `args` arrives as a bare boolean, not the array-wrapped value `enable()`'s
+   * own body expects, so `args[0]` (meant to read the real value back out) is always `undefined`
+   * and gets negated to `true`. This is what caused the City dropdown to stay visibly greyed out
+   * even after a state with real cities was chosen and the options were correctly populated.
+   * Setting the property directly still works because Select2 watches the underlying `<select>`
+   * with a MutationObserver and reacts to its `disabled` attribute changing on its own (see
+   * `_syncAttributes` in Select2's core.js) -- no Select2-specific call is needed at all. */
+  function setCityDisabled(disabled) {
+    form.city.disabled = disabled;
+  }
+
+  /** Sets the City field's value programmatically (URL param restore, or Clear All) without
+   * treating it as a real visitor-driven change -- mirrors setStateValue/setBreedValue above. */
+  function setCityValue(value) {
+    suppressCityChange = true;
+    if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2 && window.jQuery(form.city).data('select2')) {
+      window.jQuery(form.city).val(value || '').trigger('change');
+    } else {
+      form.city.value = value || '';
+    }
+    suppressCityChange = false;
+  }
+
+  /** Fetches the real, distinct city list for a state from `/api/pets/cities` and repopulates the
+   * City dropdown -- called on every state change (including a restored URL param and detected
+   * geolocation), not just once, since the list is different for every state. An empty/missing
+   * state code, a network failure, or a state with no cached shelters all land in the same
+   * "reset and disable" branch rather than leaving a stale list from the previous state showing. */
+  async function loadCitiesForState(stateCode) {
+    if (!stateCode) {
+      populateCityOptions([]);
+      setCityDisabled(true);
+      return;
+    }
+    try {
+      const data = await fetchJSON(`/api/pets/cities?state=${encodeURIComponent(stateCode)}`);
+      const cities = data.cities || [];
+      populateCityOptions(cities);
+      setCityDisabled(cities.length === 0);
+    } catch (err) {
+      populateCityOptions([]);
+      setCityDisabled(true);
+    }
+  }
+
+  /** Upgrades the City <select> into a searchable Select2 combobox (no free text -- unlike Breed,
+   * every value here is a real shelter city fetched from the server, so there's nothing useful a
+   * visitor could type that isn't already an option). Starts disabled; loadCitiesForState() turns
+   * it on once a state with real cities is chosen. Falls back to a plain native <select> if
+   * Select2/jQuery didn't load, same tradeoff as the other dropdowns on this page. */
+  function initCityDropdown() {
+    if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+      window.jQuery(form.city).select2({
+        width: '100%',
+        placeholder: 'Any city',
+        allowClear: true
+      });
+      window.jQuery(form.city).prop('disabled', true);
+      window.jQuery(form.city).on('change', () => {
+        if (suppressCityChange) return;
+        runSearch();
+      });
+    } else {
+      console.warn('Select2/jQuery did not load (CDN unreachable?) -- city field falls back to a plain dropdown.');
+      form.city.addEventListener('change', () => {
+        if (suppressCityChange) return;
+        runSearch();
+      });
+    }
   }
 
   let currentPage = 1;
@@ -199,11 +304,16 @@
     const sizes = getCheckedValues('size');
     if (sizes.length > 0) params.set('size', sizes.join(','));
     if (form.state.value.trim()) params.set('state', form.state.value.trim());
+    if (form.city.value.trim()) params.set('city', form.city.value.trim());
     if (form.urgent.checked) params.set('urgentOnly', 'true');
     return params;
   }
 
-  function restoreFiltersFromUrl() {
+  /** Async because a restored `state` param needs its City list fetched (and, if a `city` param
+   * is also present, applied) before this resolves -- see init() below, which awaits this before
+   * the first search runs, so a shared/reloaded URL with both params ends up narrowed correctly
+   * on the very first page load instead of needing a second interaction. */
+  async function restoreFiltersFromUrl() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('q')) form.q.value = params.get('q');
     setCheckedValues('species', params.get('species'));
@@ -211,7 +321,11 @@
     setCheckedValues('age', params.get('age'));
     setCheckedValues('gender', params.get('gender'));
     setCheckedValues('size', params.get('size'));
-    if (params.get('state')) setStateValue(params.get('state'));
+    if (params.get('state')) {
+      setStateValue(params.get('state'));
+      await loadCitiesForState(params.get('state'));
+      if (params.get('city')) setCityValue(params.get('city'));
+    }
     if (params.get('urgentOnly') === 'true') form.urgent.checked = true;
   }
 
@@ -219,6 +333,9 @@
     form.q.value = '';
     setBreedValue('');
     setStateValue('');
+    setCityValue('');
+    populateCityOptions([]);
+    setCityDisabled(true);
     form.urgent.checked = false;
     document.querySelectorAll('.filters-sidebar input[type="checkbox"]').forEach((cb) => { cb.checked = false; });
     stateFromGeolocation = false;
@@ -276,6 +393,9 @@
         // for explicitly.
         stateFromGeolocation = false;
         setStateValue('');
+        setCityValue('');
+        populateCityOptions([]);
+        setCityDisabled(true);
         locationBannerEl.hidden = true;
         setUrlState(currentFilters());
         await loadPage(1, false);
@@ -327,10 +447,14 @@
     const location = await detectLocation();
     if (!location || form.state.value.trim()) return;
     setStateValue(location.state);
+    loadCitiesForState(location.state);
     stateFromGeolocation = true;
     renderLocationBanner(locationBannerEl, location, () => {
       stateFromGeolocation = false;
       setStateValue('');
+      setCityValue('');
+      populateCityOptions([]);
+      setCityDisabled(true);
       locationBannerEl.hidden = true;
       runSearch();
     });
@@ -364,10 +488,11 @@
 
   initAccordion();
   initStateDropdown();
+  initCityDropdown();
   initBreedDropdown();
 
   (async function init() {
-    restoreFiltersFromUrl();
+    await restoreFiltersFromUrl();
     await maybeDetectLocation();
     loadPage(1, false);
   })();
