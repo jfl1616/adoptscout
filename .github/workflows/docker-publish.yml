@@ -1,12 +1,5 @@
-﻿name: Build and publish Docker image
+name: Test, build, and publish Docker image
 
-# Builds the Dockerfile in this repo and pushes it to Docker Hub as
-# <DOCKERHUB_USERNAME>/adoptscout:latest whenever main changes -- no local
-# Docker install needed on any dev machine. Requires two repo secrets to be
-# set first (Settings -> Secrets and variables -> Actions -> New repository
-# secret): DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (an access token, not your
-# Docker Hub password -- create one at hub.docker.com under
-# Account Settings -> Security -> New Access Token).
 on:
   push:
     branches: [main]
@@ -19,6 +12,19 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
 
+      # Real CI gate: everything below this step only runs if the tests pass. A step failure
+      # stops the whole job automatically, so a broken push to main never reaches Docker Hub.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -30,4 +36,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/adoptscout:latest
+          # Tagging with the commit SHA (in addition to :latest) means a bad deploy can be rolled
+          # back fast in Portainer -- just point the stack at the previous sha-<...> tag -- instead
+          # of needing to rebuild from an older commit.
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/adoptscout:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/adoptscout:sha-${{ github.sha }}
