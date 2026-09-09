@@ -1,7 +1,7 @@
 'use strict';
 
 (function () {
-  const { fetchJSON, el, renderPetCard, detectLocation, renderLocationBanner, speciesEmoji, initStateSelect2 } = window.AdoptScout;
+  const { fetchJSON, el, renderPetCard, detectLocation, renderLocationBanner, speciesEmoji, initStateSelect2, buildSourceBanner } = window.AdoptScout;
 
   const heroSpeciesEl = document.getElementById('hero-species');
   const heroStateEl = document.getElementById('hero-state');
@@ -92,6 +92,22 @@
       el('div', { class: 'spinner' }),
       el('p', {}, 'Finding pets for you…')
     ]));
+    // Clear any banner left over from a previous load (e.g. the nationwide-fallback retry below)
+    // so it can't stay stuck up during a fresh loading state.
+    document.getElementById('featured-source-banner').innerHTML = '';
+  }
+
+  /** Shows/hides the "Showing sample data" disclosure right where this section makes its most
+   * personalized, urgency-flavored claim ("🚨 Pets who need you most near {City, ST}") -- the one
+   * place on this app a visitor could otherwise mistake made-up sample pets for a real, local,
+   * time-sensitive need. See buildSourceBanner's doc in common.js for the unconfigured vs.
+   * unreachable wording split. */
+  function renderFeaturedSourceBanner(source, reason) {
+    const bannerEl = document.getElementById('featured-source-banner');
+    bannerEl.innerHTML = '';
+    if (source === 'mock') {
+      bannerEl.appendChild(buildSourceBanner(reason));
+    }
   }
 
   async function loadFeatured(location) {
@@ -105,6 +121,7 @@
       if (urgentData.pets && urgentData.pets.length > 0) {
         grid.innerHTML = '';
         title.textContent = location ? `🚨 Pets who need you most near ${nearLabel}` : '🚨 Pets who need you most';
+        renderFeaturedSourceBanner(urgentData.source, urgentData.reason);
         urgentData.pets.slice(0, 4).forEach((pet) => grid.appendChild(renderPetCard(pet)));
         return;
       }
@@ -131,13 +148,16 @@
       grid.innerHTML = '';
       title.textContent = location ? `Meet some pets near ${nearLabel}` : 'Meet some pets';
       if (data.pets.length === 0) {
+        renderFeaturedSourceBanner(null); // nothing to disclose -- there's no data being shown at all
         grid.appendChild(el('div', { class: 'empty-state' }, 'No pets to show right now — try Browse for the full search.'));
         return;
       }
+      renderFeaturedSourceBanner(data.source, data.reason);
       data.pets.forEach((pet) => grid.appendChild(renderPetCard(pet)));
     } catch (err) {
       grid.innerHTML = '';
       title.textContent = 'Meet some pets';
+      renderFeaturedSourceBanner(null);
       grid.appendChild(el('div', { class: 'error-state' }, `Couldn't load pets right now: ${err.message}`));
     }
   }

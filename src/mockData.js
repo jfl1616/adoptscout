@@ -1,15 +1,22 @@
 'use strict';
 
 /**
- * Sample/offline pet + shelter data, used whenever RESCUEGROUPS_API_KEY isn't configured (see
- * `isConfigured()` in rescuegroupsService.js and the routing choice in routes/pets.js). Mirrors
- * the Android app's MockPetRepository: lets the app run and be demoed/screenshotted without a
- * live API key, and gives `isUrgent`/`size`/`specialNeeds` real hand-set values so the feature
- * is visibly demonstrated even when live data's urgent signals are sparse.
+ * Sample/offline pet + shelter data -- this app's mock PetDataSource (see petDataSource.js for
+ * the shared contract). Used whenever no real source is currently usable, whether because
+ * RESCUEGROUPS_API_KEY isn't configured at all or because RescueGroups is temporarily
+ * unreachable (see petSource.js's reachability-with-fallback logic). Mirrors the Android app's
+ * MockPetRepository: lets the app run and be demoed/screenshotted without a live API key, and
+ * gives `isUrgent`/`size`/`specialNeeds` real hand-set values so the feature is visibly
+ * demonstrated even when live data's urgent signals are sparse.
  *
  * Photos are real (non-fictional-pet-specific) placeholder images: dogs from the Dog CEO API,
  * cats from TheCatAPI, a rabbit from LoremFlickr -- same sourcing as the Android app's sample
  * data, just referenced as hotlinked URLs here instead of bundled resources.
+ *
+ * Every exported method here is `async` (even though the underlying work is a synchronous array
+ * filter) purely so this module honestly satisfies PetDataSource's `Promise`-returning contract
+ * -- a caller that does `provider.searchPets(...).then(...)` shouldn't need to know or care
+ * whether `provider` happens to be this mock source or a real network-backed one.
  */
 
 const shelters = [
@@ -187,20 +194,34 @@ function matches(pet, { species, ages, genders, breed, sizes, state, city, q }) 
   return true;
 }
 
-function getMockPets(filters = {}) {
-  const filtered = pets.filter((p) => matches(p, filters));
-  return { pets: filtered, foundRows: filtered.length };
+/** Always true -- the mock source never depends on any external configuration, so it's always
+ * available as a fallback. Part of the shared PetDataSource contract (see petDataSource.js). */
+function isConfigured() {
+  return true;
 }
 
-function getMockPetById(id) {
+async function searchPets(filters = {}) {
+  const { resultStart = 0, resultLimit = 24 } = filters;
+  const filtered = pets.filter((p) => matches(p, filters));
+  // `foundRows` is the TOTAL match count (same semantic as the real provider's RescueGroups
+  // `foundRows`, used by the browse page to decide whether "Load more" should show) -- `pets` is
+  // just this one page of it. Found via the interface-alignment pass in petDataSource.js: this
+  // used to always return every match regardless of resultStart/resultLimit, which the tiny
+  // 6-pet sample dataset happened to make invisible (it's smaller than any real page size), but
+  // was a real divergence from how the RescueGroups-backed provider actually behaves.
+  const page = filtered.slice(resultStart, resultStart + resultLimit);
+  return { pets: page, foundRows: filtered.length };
+}
+
+async function getPetById(id) {
   return pets.find((p) => p.id === id) || null;
 }
 
-function getMockShelterById(orgId) {
+async function getShelterById(orgId) {
   return shelters.find((s) => s.id === orgId) || null;
 }
 
-function getMockUrgentPets(state) {
+async function getUrgentPets(state) {
   const urgent = pets.filter((p) => p.isUrgent);
   if (!state) return urgent;
   return urgent.filter((p) => matches(p, { state }));
@@ -209,7 +230,7 @@ function getMockUrgentPets(state) {
 /** Mock equivalent of rescuegroupsService's getCitiesForState -- distinct cities among the
  * sample shelters in a given state, so the City dropdown has something real to show even without
  * a live API key configured. */
-function getMockCitiesForState(state) {
+async function getCitiesForState(state) {
   const stateCode = state ? String(state).trim().slice(-2).toUpperCase() : null;
   if (!stateCode) return [];
   const cities = shelters
@@ -219,9 +240,10 @@ function getMockCitiesForState(state) {
 }
 
 module.exports = {
-  getMockPets,
-  getMockPetById,
-  getMockShelterById,
-  getMockUrgentPets,
-  getMockCitiesForState
+  isConfigured,
+  searchPets,
+  getPetById,
+  getShelterById,
+  getUrgentPets,
+  getCitiesForState
 };

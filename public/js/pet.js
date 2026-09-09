@@ -1,7 +1,7 @@
 'use strict';
 
 (function () {
-  const { fetchJSON, el, isFavorite, toggleFavorite, speciesEmoji, googleMapsUrl, applyPhoto } = window.AdoptScout;
+  const { fetchJSON, el, isFavorite, toggleFavorite, speciesEmoji, googleMapsUrl, applyPhoto, buildSourceBanner } = window.AdoptScout;
   const root = document.getElementById('detail-root');
 
   const params = new URLSearchParams(window.location.search);
@@ -399,7 +399,7 @@
     return wrap;
   }
 
-  function render(pet, shelter, source) {
+  function render(pet, shelter, source, reason) {
     document.title = `About ${pet.name} — AdoptScout`;
 
     const photos = pet.photos && pet.photos.length > 0 ? pet.photos : [];
@@ -470,7 +470,7 @@
 
     const aboutChildren = [];
     if (source === 'mock') {
-      aboutChildren.push(el('div', { class: 'source-banner' }, 'Showing sample data — set RESCUEGROUPS_API_KEY on the server to see live shelters.'));
+      aboutChildren.push(buildSourceBanner(reason));
     }
     if (pet.isUrgent) {
       aboutChildren.push(el('div', { class: 'urgent-banner' }, `${pet.name} needs a home urgently — reach out to the shelter for details.`));
@@ -539,7 +539,7 @@
     }
     try {
       const data = await fetchJSON(`/api/pets/${encodeURIComponent(petId)}`);
-      render(data.pet, data.shelter, data.source);
+      render(data.pet, data.shelter, data.source, data.reason);
     } catch (err) {
       root.innerHTML = '';
       root.appendChild(el('a', { href: backHref, class: 'back-link' }, '← Back'));

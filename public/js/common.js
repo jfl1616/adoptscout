@@ -294,6 +294,30 @@ function detectLocation() {
   });
 }
 
+/** Builds the "Showing sample data" disclosure banner shown wherever a page's data might have
+ * come from the mock/offline source instead of live RescueGroups shelters -- Browse, pet detail,
+ * and the landing page's featured/urgent strip. Shared in one place (rather than each page
+ * hand-writing the same string) specifically so the wording can't drift between pages: this
+ * disclosure matters most exactly where the app makes a claim that could otherwise read as real
+ * (e.g. the landing page's "🚨 Pets who need you most near Los Angeles, CA" -- a location- and
+ * urgency-flavored claim that would be actively misleading if shown for made-up sample pets with
+ * no visible caveat). Every caller already knows `source === 'mock'` before calling this; it just
+ * builds the element, it doesn't decide when to show it.
+ *
+ * `reason` (from the API response's own `reason` field -- see petSource.js) picks which of two
+ * messages to show, since they call for different next steps: `'unreachable'` means a real API
+ * key IS configured but RescueGroups just failed or is still in its post-failure cooldown -- for
+ * that case, telling the visitor to "set RESCUEGROUPS_API_KEY" would be actively wrong, since one
+ * is already set. Anything else (including no `reason` at all, e.g. an older cached response)
+ * falls back to the original "unconfigured" wording, which was the only case that existed before
+ * the reachability-based fallback selector shipped. */
+function buildSourceBanner(reason) {
+  const message = reason === 'unreachable'
+    ? 'Showing sample data — RescueGroups is temporarily unreachable. Live shelters will come back automatically once it recovers.'
+    : 'Showing sample data — set RESCUEGROUPS_API_KEY on the server to see live shelters.';
+  return el('div', { class: 'source-banner' }, message);
+}
+
 /** Renders the "📍 Showing pets near {City, ST}. Not you? ..." banner into `bannerEl` for a
  * successfully-detected `location` (see detectLocation). `onReset` runs when the visitor clicks
  * the reset link -- each page wires this to its own state input (browse.js also clears its
@@ -515,5 +539,6 @@ if (document.readyState === 'loading') {
 window.AdoptScout = {
   getFavorites, saveFavorites, isFavorite, toggleFavorite,
   fetchJSON, speciesEmoji, el, renderPetCard, googleMapsUrl,
-  detectLocation, renderLocationBanner, initStateSelect2, applyPhoto
+  detectLocation, renderLocationBanner, initStateSelect2, applyPhoto,
+  buildSourceBanner
 };

@@ -13,21 +13,30 @@
 
 const assert = require('node:assert/strict');
 const { _internal } = require('../src/rescuegroupsService');
+const rescueGroups = require('../src/rescuegroupsService');
 const mock = require('../src/mockData');
+const { assertImplementsPetDataSource } = require('../src/petDataSource');
+const { createPetSource } = require('../src/petSource');
 
 let passed = 0;
 let failed = 0;
 
+// `test`/`queueBanner` only enqueue -- they don't run anything immediately. That's what lets a
+// single async runner (see the bottom of this file) safely `await` every test body in the exact
+// order they were declared, which matters now that some test bodies call `async` PetDataSource
+// methods (mockData.js's exports -- see that file's doc comment for why they're async even
+// though the underlying work is synchronous). Section banners are queued as the same kind of
+// entry as tests, rather than printed immediately at parse time, purely so they still print
+// interleaved in the right place relative to their own tests' pass/fail output instead of all
+// printing upfront before any test has actually run.
+const queue = [];
+
 function test(name, fn) {
-  try {
-    fn();
-    console.log(`  ok  - ${name}`);
-    passed += 1;
-  } catch (err) {
-    console.log(`FAIL  - ${name}`);
-    console.log(`        ${err.message}`);
-    failed += 1;
-  }
+  queue.push({ kind: 'test', name, fn });
+}
+
+function queueBanner(text) {
+  queue.push({ kind: 'banner', text });
 }
 
 function daysAgoDateString(days) {
@@ -36,7 +45,124 @@ function daysAgoDateString(days) {
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${d.getUTCFullYear()}`;
 }
 
-console.log('--- parseRescueGroupsDate ---');
+queueBanner('--- PetDataSource contract ---');
+
+test('mockData.js implements the full PetDataSource contract', () => {
+  assertImplementsPetDataSource(mock, 'mock');
+});
+
+test('rescuegroupsService.js implements the full PetDataSource contract', () => {
+  assertImplementsPetDataSource(rescueGroups, 'rescuegroups');
+});
+
+test('assertImplementsPetDataSource names every missing method rather than failing on the first', () => {
+  const broken = { isConfigured: () => true, searchPets: async () => ({}) };
+  assert.throws(
+    () => assertImplementsPetDataSource(broken, 'broken-test-double'),
+    /Pet data source "broken-test-double" is missing required method\(s\): getPetById, getShelterById, getUrgentPets, getCitiesForState/
+  );
+});
+
+queueBanner('--- petSource (reachability-based fallback selector) ---');
+
+/** Builds a fake PetDataSource for petSource tests -- a plain object matching the interface
+ * shape, with call counts so tests can assert whether the real provider was actually invoked
+ * (e.g. it must NOT be called at all once a cooldown is active). `behavior` maps a method name to
+ * either a return value or an Error to throw, so each test can script exactly one method's
+ * outcome without needing to stub all five. */
+function fakeProvider({ configured = true, behavior = {} } = {}) {
+  const calls = {};
+  const provider = { isConfigured: () => configured };
+  ['searchPets', 'getPetById', 'getShelterById', 'getUrgentPets', 'getCitiesForState'].forEach((method) => {
+    calls[method] = 0;
+    provider[method] = async (...args) => {
+      calls[method] += 1;
+      const outcome = behavior[method];
+      if (outcome instanceof Error) throw outcome;
+      return typeof outcome === 'function' ? outcome(...args) : outcome;
+    };
+  });
+  provider._calls = calls;
+  return provider;
+}
+
+test('petSource uses the real provider and reports its source when the call succeeds', async () => {
+  const real = fakeProvider({ behavior: { searchPets: { pets: ['real'], foundRows: 1 } } });
+  const mockProvider = fakeProvider({ behavior: { searchPets: { pets: ['mock'], foundRows: 1 } } });
+  const ps = createPetSource({ realProvider: real, fallbackProvider: mockProvider, cooldownMs: 10_000, logger: () => {} });
+
+  const result = await ps.searchPets({});
+  assert.deepStrictEqual(result, { data: { pets: ['real'], foundRows: 1 }, source: 'rescuegroups' });
+  assert.equal(real._calls.searchPets, 1);
+  assert.equal(mockProvider._calls.searchPets, 0); // never even tried -- the real call succeeded
+});
+
+test('petSource skips the real provider entirely when it is not configured', async () => {
+  const real = fakeProvider({ configured: false, behavior: { getUrgentPets: [{ id: 'should-never-see-this' }] } });
+  const mockProvider = fakeProvider({ behavior: { getUrgentPets: [{ id: 'mock-urgent' }] } });
+  const ps = createPetSource({ realProvider: real, fallbackProvider: mockProvider, cooldownMs: 10_000, logger: () => {} });
+
+  const result = await ps.getUrgentPets('CA');
+  assert.deepStrictEqual(result, { data: [{ id: 'mock-urgent' }], source: 'mock', reason: 'unconfigured' });
+  assert.equal(real._calls.getUrgentPets, 0); // isConfigured() was false -- no attempt at all
+});
+
+test('petSource falls back to mock and logs when the real provider throws', async () => {
+  const logs = [];
+  const real = fakeProvider({ behavior: { getCitiesForState: new Error('ECONNREFUSED') } });
+  const mockProvider = fakeProvider({ behavior: { getCitiesForState: ['Mockville'] } });
+  const ps = createPetSource({ realProvider: real, fallbackProvider: mockProvider, cooldownMs: 10_000, logger: (m) => logs.push(m) });
+
+  const result = await ps.getCitiesForState('CA');
+  assert.deepStrictEqual(result, { data: ['Mockville'], source: 'mock', reason: 'unreachable' });
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /RescueGroups call to getCitiesForState\(\) failed.*ECONNREFUSED/);
+});
+
+test('petSource stays on mock (without retrying the real provider) for the rest of the cooldown window', async () => {
+  const logs = [];
+  const real = fakeProvider({ behavior: { getPetById: new Error('timeout') } });
+  const mockProvider = fakeProvider({ behavior: { getPetById: { id: 'mock-1' } } });
+  const ps = createPetSource({ realProvider: real, fallbackProvider: mockProvider, cooldownMs: 10_000, logger: (m) => logs.push(m) });
+
+  await ps.getPetById('1'); // triggers the failure and starts the cooldown
+  const second = await ps.getPetById('1'); // should be skipped, not retried, while cooldown is active
+
+  assert.deepStrictEqual(second, { data: { id: 'mock-1' }, source: 'mock', reason: 'unreachable' });
+  assert.equal(real._calls.getPetById, 1); // NOT 2 -- the second call never touched the real provider
+  assert.equal(logs.length, 2);
+  assert.match(logs[1], /Skipping RescueGroups for getPetById\(\).*cooldown/);
+});
+
+test('petSource automatically retries and recovers once the cooldown window elapses', async () => {
+  const real = fakeProvider({ behavior: { getShelterById: new Error('down') } });
+  const mockProvider = fakeProvider({ behavior: { getShelterById: { id: 'mock-shelter' } } });
+  const ps = createPetSource({ realProvider: real, fallbackProvider: mockProvider, cooldownMs: 30, logger: () => {} });
+
+  const duringOutage = await ps.getShelterById('org-1');
+  assert.equal(duringOutage.source, 'mock');
+  assert.equal(duringOutage.reason, 'unreachable');
+
+  await new Promise((resolve) => setTimeout(resolve, 60)); // let the 30ms cooldown fully elapse
+
+  real.getShelterById = async () => { real._calls.getShelterById += 1; return { id: 'real-shelter' }; };
+  const afterRecovery = await ps.getShelterById('org-1');
+  assert.deepStrictEqual(afterRecovery, { data: { id: 'real-shelter' }, source: 'rescuegroups' });
+});
+
+test('petSource does not treat a resolved null (pet not found) as a failure', async () => {
+  const logs = [];
+  const real = fakeProvider({ behavior: { getPetById: null } });
+  const mockProvider = fakeProvider({ behavior: { getPetById: { id: 'should-not-be-used' } } });
+  const ps = createPetSource({ realProvider: real, fallbackProvider: mockProvider, cooldownMs: 10_000, logger: (m) => logs.push(m) });
+
+  const result = await ps.getPetById('missing-id');
+  assert.deepStrictEqual(result, { data: null, source: 'rescuegroups' }); // real source, not mock
+  assert.equal(mockProvider._calls.getPetById, 0);
+  assert.equal(logs.length, 0);
+});
+
+queueBanner('--- parseRescueGroupsDate ---');
 
 test('parses a real bare-date value seen on animalAvailableDate ("3/30/2026")', () => {
   const parsed = _internal.parseRescueGroupsDate('3/30/2026');
@@ -72,7 +198,7 @@ test('rejects an out-of-range month/day rather than silently misparsing', () => 
   assert.equal(_internal.parseRescueGroupsDate('13/40/2026'), null);
 });
 
-console.log('--- isUrgent heuristic ---');
+queueBanner('--- isUrgent heuristic ---');
 
 test('flags urgent when animalKillDate is set, regardless of availableDate', () => {
   assert.equal(_internal.isUrgent({ animalKillDate: '1/1/2026', animalAvailableDate: '' }), true);
@@ -103,7 +229,7 @@ test('an unparseable availableDate degrades to "not urgent" rather than throwing
   assert.equal(_internal.isUrgent({ animalKillDate: '', animalAvailableDate: 'garbage' }), false);
 });
 
-console.log('--- normalizeSize ---');
+queueBanner('--- normalizeSize ---');
 
 test('maps "X-Large" to "Extra Large"', () => {
   assert.equal(_internal.normalizeSize('X-Large'), 'Extra Large');
@@ -122,7 +248,7 @@ test('falls back to "Unknown" for blank/missing size', () => {
   assert.equal(_internal.normalizeSize(null), 'Unknown');
 });
 
-console.log('--- denormalizeSize (the inverse, used to build the server-side size filter) ---');
+queueBanner('--- denormalizeSize (the inverse, used to build the server-side size filter) ---');
 
 test('maps this app\'s "Extra Large" label back to RescueGroups\' own "X-Large" value', () => {
   assert.equal(_internal.denormalizeSize('Extra Large'), 'X-Large');
@@ -141,7 +267,7 @@ test('round-trips with normalizeSize', () => {
   assert.equal(_internal.normalizeSize(_internal.denormalizeSize('Extra Large')), 'Extra Large');
 });
 
-console.log('--- extractStateCode ---');
+queueBanner('--- extractStateCode ---');
 
 test('extracts a trailing two-letter state code', () => {
   assert.equal(_internal.extractStateCode('Los Angeles, CA'), 'CA');
@@ -157,7 +283,7 @@ test('returns null for a location with no trailing state code', () => {
   assert.equal(_internal.extractStateCode(null), null);
 });
 
-console.log('--- stripDescriptionHtml ---');
+queueBanner('--- stripDescriptionHtml ---');
 
 test('strips RescueGroups\' own rgSummary wrapper div (real example from Catalina\'s listing)', () => {
   const raw = '<div class="rgSummary">Semi feral sibling of Carnegie &amp; Calista<br></div>';
@@ -202,7 +328,7 @@ test('passes plain text through unchanged (most descriptions are NOT HTML)', () 
   assert.equal(_internal.stripDescriptionHtml('A very good dog who loves belly rubs.'), 'A very good dog who loves belly rubs.');
 });
 
-console.log('--- toPet mapping ---');
+queueBanner('--- toPet mapping ---');
 
 test('maps a realistic raw RescueGroups animal record end-to-end', () => {
   const pet = _internal.toPet({
@@ -239,90 +365,132 @@ test('returns null for a record missing an ID or name (bad shelter data)', () =>
   assert.equal(_internal.toPet(null), null);
 });
 
-console.log('--- mock data fallback ---');
+queueBanner('--- mock data fallback ---');
 
-test('mock search filters by species', () => {
-  const { pets } = mock.getMockPets({ species: 'Cat' });
+// Every mock.* call below is awaited -- mockData.js's exports are `async` (see its doc comment)
+// purely so it honestly satisfies PetDataSource's Promise-returning contract, even though the
+// underlying work is a synchronous array filter.
+
+test('mock search filters by species', async () => {
+  const { pets } = await mock.searchPets({ species: 'Cat' });
   assert.ok(pets.length > 0);
   assert.ok(pets.every((p) => p.species === 'Cat'));
 });
 
-test('mock search filters by species with multiple values (backs the browse page\'s Species checkbox group)', () => {
-  const { pets } = mock.getMockPets({ species: ['Cat', 'Rabbit'] });
+test('mock search filters by species with multiple values (backs the browse page\'s Species checkbox group)', async () => {
+  const { pets } = await mock.searchPets({ species: ['Cat', 'Rabbit'] });
   assert.ok(pets.length > 0);
   assert.ok(pets.every((p) => p.species === 'Cat' || p.species === 'Rabbit'));
 });
 
-test('mock search filters by name (q)', () => {
-  const { pets } = mock.getMockPets({ q: 'luna' });
+test('mock search filters by name (q)', async () => {
+  const { pets } = await mock.searchPets({ q: 'luna' });
   assert.ok(pets.some((p) => p.name === 'Luna'));
 });
 
-test('mock search filters by breed (contains, case-insensitive -- backs the new browse-page breed filter)', () => {
-  const { pets } = mock.getMockPets({ breed: 'shepherd' });
+test('mock search filters by breed (contains, case-insensitive -- backs the new browse-page breed filter)', async () => {
+  const { pets } = await mock.searchPets({ breed: 'shepherd' });
   assert.deepStrictEqual(pets.map((p) => p.name), ['Duke']);
 });
 
-test('mock search filters by gender (backs the new browse-page gender filter)', () => {
-  const { pets } = mock.getMockPets({ genders: ['Female'] });
+test('mock search filters by gender (backs the new browse-page gender filter)', async () => {
+  const { pets } = await mock.searchPets({ genders: ['Female'] });
   assert.deepStrictEqual(pets.map((p) => p.name).sort(), ['Clementine', 'Luna', 'Mochi']);
 });
 
-test('mock search filters by size (now a real filter, not just client-side after the page loads)', () => {
-  const { pets } = mock.getMockPets({ sizes: ['Extra Large'] });
+test('mock search filters by size (now a real filter, not just client-side after the page loads)', async () => {
+  const { pets } = await mock.searchPets({ sizes: ['Extra Large'] });
   assert.deepStrictEqual(pets.map((p) => p.name), ['Duke']);
 });
 
-test('mock getMockPetById finds a known sample pet', () => {
-  const pet = mock.getMockPetById('mock-101');
+test('mock getPetById finds a known sample pet', async () => {
+  const pet = await mock.getPetById('mock-101');
   assert.ok(pet);
   assert.equal(pet.name, 'Biscuit');
 });
 
-test('mock getMockUrgentPets only returns urgent pets', () => {
-  const urgent = mock.getMockUrgentPets();
+test('mock getUrgentPets only returns urgent pets', async () => {
+  const urgent = await mock.getUrgentPets();
   assert.ok(urgent.length > 0);
   assert.ok(urgent.every((p) => p.isUrgent));
 });
 
-test('mock getMockUrgentPets narrows to a state when one is passed (backs the landing page geolocation feature)', () => {
+test('mock getUrgentPets narrows to a state when one is passed (backs the landing page geolocation feature)', async () => {
   // All mock shelters are in CA, so this should return the same set as no filter at all.
-  const urgentCA = mock.getMockUrgentPets('CA');
-  assert.deepStrictEqual(urgentCA.map((p) => p.id).sort(), mock.getMockUrgentPets().map((p) => p.id).sort());
+  const urgentCA = await mock.getUrgentPets('CA');
+  const urgentAll = await mock.getUrgentPets();
+  assert.deepStrictEqual(urgentCA.map((p) => p.id).sort(), urgentAll.map((p) => p.id).sort());
 
   // A state with no mock shelters should come back empty rather than ignoring the filter.
-  const urgentTX = mock.getMockUrgentPets('TX');
+  const urgentTX = await mock.getUrgentPets('TX');
   assert.deepStrictEqual(urgentTX, []);
 });
 
-test('mock search filters by city (backs the new Browse page City dropdown)', () => {
+test('mock search filters by city (backs the new Browse page City dropdown)', async () => {
   // Rocket and Clementine are the only two pets at the Long Beach shelter (mock-2).
-  const { pets } = mock.getMockPets({ state: 'CA', city: 'Long Beach' });
+  const { pets } = await mock.searchPets({ state: 'CA', city: 'Long Beach' });
   assert.deepStrictEqual(pets.map((p) => p.name).sort(), ['Clementine', 'Rocket']);
 });
 
-test('mock search by city is case-insensitive and ignores extra whitespace', () => {
-  const { pets } = mock.getMockPets({ state: 'CA', city: '  long beach  ' });
+test('mock search by city is case-insensitive and ignores extra whitespace', async () => {
+  const { pets } = await mock.searchPets({ state: 'CA', city: '  long beach  ' });
   assert.deepStrictEqual(pets.map((p) => p.name).sort(), ['Clementine', 'Rocket']);
 });
 
-test('mock search by a city with no matching shelter returns no pets', () => {
-  const { pets } = mock.getMockPets({ state: 'CA', city: 'Sacramento' });
+test('mock search by a city with no matching shelter returns no pets', async () => {
+  const { pets } = await mock.searchPets({ state: 'CA', city: 'Sacramento' });
   assert.deepStrictEqual(pets, []);
 });
 
-test('mock getMockCitiesForState returns the distinct, sorted real cities in that state', () => {
-  assert.deepStrictEqual(mock.getMockCitiesForState('CA'), ['Long Beach', 'Los Angeles', 'San Pedro']);
+test('mock getCitiesForState returns the distinct, sorted real cities in that state', async () => {
+  assert.deepStrictEqual(await mock.getCitiesForState('CA'), ['Long Beach', 'Los Angeles', 'San Pedro']);
 });
 
-test('mock getMockCitiesForState returns an empty list for a state with no mock shelters', () => {
-  assert.deepStrictEqual(mock.getMockCitiesForState('TX'), []);
+test('mock getCitiesForState returns an empty list for a state with no mock shelters', async () => {
+  assert.deepStrictEqual(await mock.getCitiesForState('TX'), []);
 });
 
-test('mock getMockCitiesForState returns an empty list when no state is given', () => {
-  assert.deepStrictEqual(mock.getMockCitiesForState(), []);
-  assert.deepStrictEqual(mock.getMockCitiesForState(''), []);
+test('mock search respects resultStart/resultLimit like the real provider does (interface alignment)', async () => {
+  const all = await mock.searchPets({});
+  assert.equal(all.pets.length, 6); // the full mock dataset, when no pagination is requested
+
+  const firstPage = await mock.searchPets({ resultStart: 0, resultLimit: 2 });
+  assert.equal(firstPage.pets.length, 2);
+  assert.equal(firstPage.foundRows, 6); // foundRows is the TOTAL match count, not the page size
+
+  const secondPage = await mock.searchPets({ resultStart: 2, resultLimit: 2 });
+  assert.equal(secondPage.pets.length, 2);
+  assert.notDeepEqual(firstPage.pets.map((p) => p.id), secondPage.pets.map((p) => p.id));
 });
 
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed > 0 ? 1 : 0);
+test('mock getCitiesForState returns an empty list when no state is given', async () => {
+  assert.deepStrictEqual(await mock.getCitiesForState(), []);
+  assert.deepStrictEqual(await mock.getCitiesForState(''), []);
+});
+
+/** Drains the queue in declaration order -- banners print, tests run (`await`ed, so an async
+ * test body's rejection is caught same as a sync one's thrown error), pass/fail tallies as it
+ * goes -- then prints the final summary and exits. See the `queue`/`test`/`queueBanner` doc
+ * comment near the top of this file for why this two-phase "declare everything, then run it"
+ * structure exists instead of running each test immediately as `test(...)` is called. */
+async function runQueue() {
+  for (const entry of queue) {
+    if (entry.kind === 'banner') {
+      console.log(entry.text);
+      continue;
+    }
+    try {
+      await entry.fn();
+      console.log(`  ok  - ${entry.name}`);
+      passed += 1;
+    } catch (err) {
+      console.log(`FAIL  - ${entry.name}`);
+      console.log(`        ${err.message}`);
+      failed += 1;
+    }
+  }
+  console.log(`\n${passed} passed, ${failed} failed`);
+  process.exit(failed > 0 ? 1 : 0);
+}
+
+runQueue();

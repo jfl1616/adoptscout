@@ -1,7 +1,7 @@
 'use strict';
 
 (function () {
-  const { fetchJSON, el, renderPetCard, detectLocation, renderLocationBanner, initStateSelect2 } = window.AdoptScout;
+  const { fetchJSON, el, renderPetCard, detectLocation, renderLocationBanner, initStateSelect2, buildSourceBanner } = window.AdoptScout;
 
   const resultsEl = document.getElementById('results');
   const loadMoreBtn = document.getElementById('load-more');
@@ -411,12 +411,9 @@
       loadMoreBtn.disabled = false;
       loadMoreBtn.textContent = 'Load more';
 
+      sourceBannerEl.innerHTML = '';
       if (data.source === 'mock') {
-        sourceBannerEl.innerHTML = '';
-        sourceBannerEl.appendChild(el('div', { class: 'source-banner' },
-          'Showing sample data — set RESCUEGROUPS_API_KEY on the server to see live shelters.'));
-      } else {
-        sourceBannerEl.innerHTML = '';
+        sourceBannerEl.appendChild(buildSourceBanner(data.reason));
       }
     } catch (err) {
       renderStatus(`Something went wrong: ${err.message}`, 'error');

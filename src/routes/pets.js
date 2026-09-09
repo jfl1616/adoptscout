@@ -1,18 +1,9 @@
 'use strict';
 
 const express = require('express');
-const rescueGroups = require('../rescuegroupsService');
-const mock = require('../mockData');
+const petSource = require('../petSource');
 
 const router = express.Router();
-
-/** true when a real RESCUEGROUPS_API_KEY is configured; false falls back to mock.js sample
- * data, exactly like the Android app's AppContainer picking between RescueGroupsPetRepository
- * and MockPetRepository. Checked per-request (not cached at startup) so the container can pick
- * up a key added to the environment without a code change, only a restart of the process. */
-function usingRealData() {
-  return rescueGroups.isConfigured();
-}
 
 /** Splits a comma-separated query param (e.g. "?age=Young,Adult") into a clean array, or
  * returns undefined if the param is absent -- keeps the service layer from having to guess
@@ -31,13 +22,19 @@ function parseListParam(value) {
  * see getCitiesForState's doc), q (name search), urgentOnly (true/false, filtered client-side
  * below), page (1-based), pageSize.
  *
- * species/age/gender/breed/size/state/city/q are all sent to RescueGroups (or matched in
- * mock.js) as real filters now. `urgentOnly` is the one exception that's still applied AFTER the
- * page is fetched, since "field is non-blank" isn't a confirmed RescueGroups filter operation --
- * there's no single field to filter on, only this app's own heuristic computed from two other
- * fields. Because of that, a page can still come back smaller than pageSize when urgentOnly is
- * checked even though more urgent pets exist further in -- a known, documented limitation (see
- * README) that no longer applies to size now that it's a real server-side filter.
+ * species/age/gender/breed/size/state/city/q are all sent to whichever source petSource picks
+ * (see src/petSource.js) as real filters now. `urgentOnly` is the one exception that's still
+ * applied AFTER the page is fetched, since "field is non-blank" isn't a confirmed RescueGroups
+ * filter operation -- there's no single field to filter on, only this app's own heuristic
+ * computed from two other fields. Because of that, a page can still come back smaller than
+ * pageSize when urgentOnly is checked even though more urgent pets exist further in -- a known,
+ * documented limitation (see README) that no longer applies to size now that it's a real
+ * server-side filter.
+ *
+ * This route no longer decides "real vs. mock" itself -- petSource does, per call, based on
+ * whether RescueGroups is configured AND currently reachable (not just configured), falling back
+ * live if it isn't. `source` in the response reflects whichever one actually served THIS
+ * request, which is why it's read off the selector's result rather than assumed up front.
  */
 router.get('/', async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -58,21 +55,9 @@ router.get('/', async (req, res) => {
   };
 
   try {
-    let pets;
-    let foundRows;
-    let source;
-
-    if (usingRealData()) {
-      const result = await rescueGroups.searchPets(filters);
-      pets = result.pets;
-      foundRows = result.foundRows;
-      source = 'rescuegroups';
-    } else {
-      const result = mock.getMockPets(filters);
-      pets = result.pets;
-      foundRows = result.foundRows;
-      source = 'mock';
-    }
+    const { data, source, reason } = await petSource.searchPets(filters);
+    let pets = data.pets;
+    const foundRows = data.foundRows;
 
     if (urgentOnly) {
       pets = pets.filter((p) => p.isUrgent);
@@ -87,9 +72,15 @@ router.get('/', async (req, res) => {
       // so this can still be true even when urgentOnly shrank `pets` on this page. size is no
       // longer part of this caveat now that it's sent to RescueGroups as a real filter.
       hasMore: foundRows > page * pageSize,
-      source
+      source,
+      // Only meaningful when source is 'mock' -- 'unconfigured' (no key set) vs. 'unreachable'
+      // (a key IS set, RescueGroups just failed or is still in its post-failure cooldown). See
+      // petSource.js's doc comment for why the frontend needs to tell these apart.
+      reason
     });
   } catch (err) {
+    // petSource already absorbs a RescueGroups failure by falling back to mock -- reaching this
+    // catch means BOTH sources failed (or, realistically, a bug), which is genuinely exceptional.
     res.status(502).json({ error: err.message || 'Failed to reach RescueGroups' });
   }
 });
@@ -106,9 +97,7 @@ router.get('/cities', async (req, res) => {
     return;
   }
   try {
-    const cities = usingRealData()
-      ? await rescueGroups.getCitiesForState(state)
-      : mock.getMockCitiesForState(state);
+    const { data: cities } = await petSource.getCitiesForState(state);
     res.json({ cities });
   } catch (err) {
     res.status(502).json({ error: err.message || 'Failed to reach RescueGroups' });
@@ -122,31 +111,30 @@ router.get('/cities', async (req, res) => {
 router.get('/urgent', async (req, res) => {
   const state = req.query.state || undefined;
   try {
-    const pets = usingRealData() ? await rescueGroups.getUrgentPets(state) : mock.getMockUrgentPets(state);
-    res.json({ pets, source: usingRealData() ? 'rescuegroups' : 'mock' });
+    const { data: pets, source, reason } = await petSource.getUrgentPets(state);
+    res.json({ pets, source, reason });
   } catch (err) {
     res.status(502).json({ error: err.message || 'Failed to reach RescueGroups' });
   }
 });
 
 /** GET /api/pets/:id -- pet detail, plus its shelter embedded under `shelter` so the frontend
- * doesn't need a second round-trip. */
+ * doesn't need a second round-trip. `source` reflects whichever source served the pet lookup --
+ * in the rare case RescueGroups fails between the pet and shelter calls (entering cooldown
+ * mid-request), the shelter would come from mock while `source` still says "rescuegroups"; an
+ * acceptable, very unlikely edge case rather than something worth a more complex response shape. */
 router.get('/:id', async (req, res) => {
   try {
-    const pet = usingRealData()
-      ? await rescueGroups.getPetById(req.params.id)
-      : mock.getMockPetById(req.params.id);
+    const { data: pet, source, reason } = await petSource.getPetById(req.params.id);
 
     if (!pet) {
       res.status(404).json({ error: 'Pet not found (it may have been adopted or delisted)' });
       return;
     }
 
-    const shelter = usingRealData()
-      ? await rescueGroups.getShelterById(pet.orgId)
-      : mock.getMockShelterById(pet.orgId);
+    const { data: shelter } = await petSource.getShelterById(pet.orgId);
 
-    res.json({ pet, shelter, source: usingRealData() ? 'rescuegroups' : 'mock' });
+    res.json({ pet, shelter, source, reason });
   } catch (err) {
     res.status(502).json({ error: err.message || 'Failed to reach RescueGroups' });
   }
